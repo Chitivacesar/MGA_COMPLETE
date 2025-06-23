@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Dialog, 
   DialogActions, 
@@ -22,28 +22,28 @@ import { Close as CloseIcon } from '@mui/icons-material';
 export const UserRoleAssignment = ({ 
   open, 
   onClose, 
-  user,
-  allRoles,
+  usuario,
+  roles,
   onSave
 }) => {
   const [selectedRoles, setSelectedRoles] = useState([]);
   const [primaryRole, setPrimaryRole] = useState('');
 
   useEffect(() => {
-    if (user && user.roles) {
-      setSelectedRoles(user.roles.map(role => role.id));
+    if (usuario && usuario.roles) {
+      setSelectedRoles(usuario.roles.map(role => role._id));
       
       // Si hay un rol primario, seleccionarlo
-      if (user.primaryRoleId) {
-        setPrimaryRole(user.primaryRoleId);
-      } else if (user.roles.length > 0) {
-        setPrimaryRole(user.roles[0].id);
+      if (usuario.primaryRoleId) {
+        setPrimaryRole(usuario.primaryRoleId);
+      } else if (usuario.roles.length > 0) {
+        setPrimaryRole(usuario.roles[0]._id);
       }
     } else {
       setSelectedRoles([]);
       setPrimaryRole('');
     }
-  }, [user, open]);
+  }, [usuario, open]);
 
   const handleToggleRole = (roleId) => {
     setSelectedRoles(prev => {
@@ -69,7 +69,7 @@ export const UserRoleAssignment = ({
 
   const handleSave = () => {
     onSave({
-      userId: user.id,
+      userId: usuario._id,
       roleIds: selectedRoles,
       primaryRoleId: primaryRole
     });
@@ -92,7 +92,7 @@ export const UserRoleAssignment = ({
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
         <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.125rem' }}>
-          Asignar Roles a {user?.nombre}
+          Asignar Roles a {usuario?.nombre}
         </Typography>
         <IconButton 
           onClick={onClose} 
@@ -122,12 +122,12 @@ export const UserRoleAssignment = ({
           </TableRow>
         </TableHead>
         <TableBody>
-          {allRoles.map((role) => (
-            <TableRow key={role.id}>
+          {roles && roles.map((role) => (
+            <TableRow key={role._id}>
               <TableCell padding="checkbox">
                 <Checkbox
-                  checked={selectedRoles.includes(role.id)}
-                  onChange={() => handleToggleRole(role.id)}
+                  checked={selectedRoles.includes(role._id)}
+                  onChange={() => handleToggleRole(role._id)}
                 />
               </TableCell>
               <TableCell>{role.nombre}</TableCell>
@@ -147,10 +147,10 @@ export const UserRoleAssignment = ({
               label="Rol Principal"
               onChange={handlePrimaryRoleChange}
             >
-              {allRoles
-                .filter(role => selectedRoles.includes(role.id))
+              {roles
+                .filter(role => selectedRoles.includes(role._id))
                 .map(role => (
-                  <MenuItem key={role.id} value={role.id}>
+                  <MenuItem key={role._id} value={role._id}>
                     {role.nombre}
                   </MenuItem>
                 ))

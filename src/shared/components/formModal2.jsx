@@ -258,6 +258,41 @@ export const FormModal = ({  // Changed back to FormModal
           </Box>
         )
 
+      case "checkbox-group":
+        return (
+          <Box key={field.id} sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+              {field.label}
+            </Typography>
+            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+              <Grid container spacing={2}>
+                {field.options?.map((option) => (
+                  <Grid item xs={12} sm={6} key={option.value}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={Array.isArray(formData[field.id]) && formData[field.id].includes(option.value)}
+                          onChange={(e) => {
+                            const currentValues = Array.isArray(formData[field.id]) ? formData[field.id] : [];
+                            const newValues = e.target.checked
+                              ? [...currentValues, option.value]
+                              : currentValues.filter((value) => value !== option.value);
+                            handleChange(field.id, newValues);
+                          }}
+                        />
+                      }
+                      label={option.label}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+            </Paper>
+            {errors[field.id] && (
+              <FormHelperText error>{errors[field.id]}</FormHelperText>
+            )}
+          </Box>
+        );
+
       case "radio":
         return (
           <Box key={field.id} sx={{ mb: 2 }}>
@@ -383,6 +418,54 @@ export const FormModal = ({  // Changed back to FormModal
             </TableContainer>
           </Box>
         )
+
+      case "table":
+        return (
+          <Box key={field.id} sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+              {field.label}
+            </Typography>
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    {field.columns.map((column) => (
+                      <TableCell key={column.id}>{column.label}</TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {field.rows.map((row, rowIndex) => (
+                    <TableRow key={rowIndex}>
+                      {field.columns.map((column) => (
+                        <TableCell key={column.id}>
+                          {column.type === 'checkbox' ? (
+                            <Checkbox
+                              checked={formData[field.id]?.[rowIndex]?.[column.id] || false}
+                              onChange={(e) => {
+                                const newData = [...(formData[field.id] || field.rows)];
+                                newData[rowIndex] = {
+                                  ...newData[rowIndex],
+                                  [column.id]: e.target.checked
+                                };
+                                handleChange(field.id, newData);
+                              }}
+                            />
+                          ) : (
+                            row[column.id]
+                          )}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            {errors[field.id] && (
+              <FormHelperText error>{errors[field.id]}</FormHelperText>
+            )}
+          </Box>
+        );
 
       default:
         return (

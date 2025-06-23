@@ -1,431 +1,538 @@
-"use client"
-
-import { useState } from "react"
-import { GenericList2 } from "../../../shared/components/genericlist2"
-import { DetailModal } from "../../../shared/components/DetailModal"
-import { FormModal } from "../../../shared/components/formModal2"
-import { StatusButton } from "../../../shared/components/StatusButton"
-import { RolePrivilegeAssignment } from "../../../shared/components/RolePrivilegeAssignment"
-import { RoleViewPermissionAssignment } from "../../../shared/components/RoleViewPermissionAssignment"
-import { Button, Chip, Box, Typography } from "@mui/material"
-// Corregir la importación - asegúrate de que la ruta sea correcta
-import SuccessAlert from "../../../shared/components/Alert"
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+import { GenericList2 } from "../../../shared/components/genericlist2";
+import { DetailModal } from '../../../shared/components/DetailModal';
+import { StatusButton } from '../../../shared/components/StatusButton';
+import { FormModal } from '../../../shared/components/formModal2';
+import { SuccessAlert } from '../../../shared/components/SuccessAlert';
 
 const Roles = () => {
-  // Estado para la alerta de éxito
-  const [successAlert, setSuccessAlert] = useState({
+  // Estados
+  const [roles, setRoles] = useState([]);
+  const [selectedRol, setSelectedRol] = useState(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [formModalOpen, setFormModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [permisos, setPermisos] = useState([]); // Los módulos disponibles
+  const [privilegios, setPrivilegios] = useState([]); // Las acciones disponibles
+  const [alert, setAlert] = useState({
     open: false,
-    message: ""
-  })
+    message: ''
+  });
 
-  // Función para cerrar la alerta
-  const handleCloseSuccessAlert = () => {
-    setSuccessAlert({...successAlert, open: false})
-  }
-
-  // Función para mostrar la alerta
-  const showSuccessAlert = (message) => {
-    setSuccessAlert({
-      open: true,
-      message
-    })
-  }
-
-  const [privilegios, setPrivilegios] = useState([
-    { id: 1, nombre_privilegio: "Crear" },
-    { id: 2, nombre_privilegio: "Ver" },
-    { id: 3, nombre_privilegio: "Editar" },
-    { id: 4, nombre_privilegio: "Eliminar" },
-  ])
-
-  // Initial roles data with privileges
-  const [roles, setRoles] = useState([
-    {
-      id: 1,
-      nombre: "Administrador",
-      descripcion: "Control total del sistema",
-      fecha: "5/11/2024",
-      estado: true,
-      privileges: [
-        { id: 1, nombre_privilegio: "Crear" },
-        { id: 2, nombre_privilegio: "Ver" },
-        { id: 3, nombre_privilegio: "Editar" },
-        { id: 4, nombre_privilegio: "Eliminar" },
-      ],
-      viewPermissions: [
-        "dashboard",
-        "servicios-musicales-profesores",
-        "servicios-musicales-programacion-profesores",
-        "servicios-musicales-cursos-matriculas",
-        "servicios-musicales-aulas",
-        "servicios-musicales-clases",
-        "venta-servicios-clientes",
-        "venta-servicios-beneficiarios",
-        "venta-servicios-venta-matriculas",
-        "venta-servicios-pagos",
-        "venta-servicios-programacion-clases",
-        "venta-servicios-asistencia",
-        "configuracion-roles",
-        "configuracion-usuarios",
-      ],
-    },
-    {
-      id: 2,
-      nombre: "Secretario",
-      descripcion: "Gestión administrativa",
-      fecha: "5/11/2024",
-      estado: true,
-      privileges: [
-        { id: 1, nombre_privilegio: "Crear" },
-        { id: 2, nombre_privilegio: "Ver" },
-      ],
-      viewPermissions: [
-        "dashboard",
-        "venta-servicios",
-        "venta-servicios-clientes",
-        "venta-servicios-beneficiarios",
-        "venta-servicios-venta-matriculas",
-        "venta-servicios-pagos",
-      ],
-    },
-    {
-      id: 3,
-      nombre: "Profesor",
-      descripcion: "Gestión de cursos y estudiantes",
-      fecha: "5/11/2024",
-      estado: true,
-      privileges: [
-        { id: 2, nombre_privilegio: "Ver" },
-        { id: 3, nombre_privilegio: "Editar" },
-      ],
-      viewPermissions: [
-        "dashboard",
-        "servicios-musicales-clases",
-        "venta-servicios-beneficiarios",
-        "venta-servicios-asistencia",
-      ],
-    },
-    {
-      id: 4,
-      nombre: "Beneficiarios",
-      descripcion: "Acceso limitado para beneficiarios",
-      fecha: "5/11/2024",
-      estado: true,
-      privileges: [{ id: 2, nombre_privilegio: "Ver" }],
-      viewPermissions: ["dashboard"],
-    },
-  ])
-
-  const [selectedRole, setSelectedRole] = useState(null)
-  const [detailModalOpen, setDetailModalOpen] = useState(false)
-  const [formModalOpen, setFormModalOpen] = useState(false)
-  const [privilegeAssignmentOpen, setPrivilegeAssignmentOpen] = useState(false)
-  const [viewPermissionAssignmentOpen, setViewPermissionAssignmentOpen] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
-
-  const handleCreate = () => {
-    setIsEditing(false)
-    setSelectedRole(null)
-    setFormModalOpen(true)
-  }
-
-  const handleEdit = (role) => {
-    setIsEditing(true)
-    setSelectedRole(role)
-    setFormModalOpen(true)
-  }
-
-  const handleDelete = (role) => {
-    const confirmDelete = window.confirm(`¿Está seguro de eliminar el rol ${role.nombre}?`)
-    if (confirmDelete) {
-      setRoles((prev) => prev.filter((item) => item.id !== role.id))
-      showSuccessAlert(`El rol ${role.nombre} ha sido eliminado correctamente`)
+  // Función para transformar permisos del formulario a IDs de permisos y privilegios
+  const transformPermisosToIds = (permisosFormulario, permisosDisponibles, privilegiosDisponibles) => {
+    console.log('=== TRANSFORMANDO PERMISOS ===');
+    console.log('Permisos del formulario:', permisosFormulario);
+    
+    const permisosIds = [];
+    const privilegiosIds = [];
+    
+    // Verificar que permisosFormulario sea un array
+    if (!Array.isArray(permisosFormulario)) {
+      console.error('permisosFormulario no es un array:', permisosFormulario);
+      return { permisosIds: [], privilegiosIds: [] };
     }
-  }
+    
+    // Filtrar módulos con permisos seleccionados
+    const permisosSeleccionados = permisosFormulario.filter(permiso => 
+      permiso.ver || permiso.crear || permiso.editar || permiso.eliminar || permiso.descargar
+    );
+    
+    permisosSeleccionados.forEach(permisoForm => {
+      // Buscar el ID del módulo
+      const permisoModulo = permisosDisponibles.find(p => 
+        p.permiso === permisoForm.modulo || p.nombre === permisoForm.modulo
+      );
+      
+      if (permisoModulo?._id) {
+        permisosIds.push(permisoModulo._id);
+        
+        // Agregar IDs de privilegios seleccionados
+        if (permisoForm.ver) {
+          const privilegioVer = privilegiosDisponibles.find(p => 
+            p.nombre_privilegio === 'Ver' || p.nombre === 'Ver'
+          );
+          if (privilegioVer?._id) privilegiosIds.push(privilegioVer._id);
+        }
+        
+        if (permisoForm.crear) {
+          const privilegioCrear = privilegiosDisponibles.find(p => 
+            p.nombre_privilegio === 'Crear' || p.nombre === 'Crear'
+          );
+          if (privilegioCrear?._id) privilegiosIds.push(privilegioCrear._id);
+        }
+        
+        if (permisoForm.editar) {
+          const privilegioEditar = privilegiosDisponibles.find(p => 
+            p.nombre_privilegio === 'Editar' || p.nombre === 'Editar'
+          );
+          if (privilegioEditar?._id) privilegiosIds.push(privilegioEditar._id);
+        }
+        
+        if (permisoForm.eliminar) {
+          const privilegioEliminar = privilegiosDisponibles.find(p => 
+            p.nombre_privilegio === 'Eliminar' || p.nombre === 'Eliminar'
+          );
+          if (privilegioEliminar?._id) privilegiosIds.push(privilegioEliminar._id);
+        }
+        
+        if (permisoForm.descargar) {
+          const privilegioDescargar = privilegiosDisponibles.find(p => 
+            p.nombre_privilegio === 'Descargar' || p.nombre === 'Descargar'
+          );
+          if (privilegioDescargar?._id) privilegiosIds.push(privilegioDescargar._id);
+        }
+      }
+    });
+    
+    // Eliminar duplicados
+    const permisosUnicos = [...new Set(permisosIds)];
+    const privilegiosUnicos = [...new Set(privilegiosIds)];
+    
+    return { 
+      permisosIds: permisosUnicos,
+      privilegiosIds: privilegiosUnicos
+    };
+  };
 
-  const handleView = (role) => {
-    setSelectedRole(role)
-    setDetailModalOpen(true)
-  }
+  // Función para obtener los roles
+  const fetchRoles = async () => {
+    try {
+      const response = await axios.get('http://localhost:3000/api/roles?populate=permisos,privilegios');
+      console.log('Roles cargados:', response.data);
+      setRoles(response.data);
+    } catch (error) {
+      console.error('Error al cargar roles:', error);
+      setAlert({
+        open: true,
+        message: 'Error al cargar los roles'
+      });
+    }
+  };
+
+  // Función para obtener permisos (módulos)
+  const fetchPermisos = async () => {
+    try {
+      const response = await axios.get('http://localhost:3000/api/permisos');
+      console.log('Permisos (módulos) cargados:', response.data);
+      setPermisos(response.data);
+    } catch (error) {
+      console.error('Error al cargar permisos:', error);
+    }
+  };
+
+  // Función para obtener privilegios (acciones)
+  const fetchPrivilegios = async () => {
+    try {
+      const response = await axios.get('http://localhost:3000/api/privilegios');
+      console.log('Privilegios (acciones) cargados:', response.data);
+      setPrivilegios(response.data);
+    } catch (error) {
+      console.error('Error al cargar privilegios:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchRoles();
+    fetchPermisos();
+    fetchPrivilegios();
+  }, []);
+
+  // Función para cambiar el estado
+  const handleToggleStatus = async (rolId) => {
+    try {
+      const rol = roles.find(r => r._id === rolId);
+      if (!rol) return;
+
+      const nuevoEstado = !rol.estado;
+      
+      // Actualizar en el frontend primero
+      setRoles(prevRoles => prevRoles.map(r => 
+        r._id === rolId ? { ...r, estado: nuevoEstado } : r
+      ));
+
+      // Preparar datos para actualización
+      const updateData = {
+        nombre: rol.nombre,
+        descripcion: rol.descripcion,
+        estado: nuevoEstado,
+        permisos: rol.permisos?.map(p => p._id) || [],      // IDs de módulos
+        privilegios: rol.privilegios?.map(p => p._id) || [] // IDs de acciones
+      };
+
+      // Actualizar en la API
+      await axios.put(`http://localhost:3000/api/roles/${rolId}`, updateData);
+
+      setAlert({
+        open: true,
+        message: 'Estado actualizado correctamente'
+      });
+    } catch (error) {
+      // Revertir cambios en caso de error
+      fetchRoles();
+      
+      console.error('Error al actualizar estado del rol:', error);
+      setAlert({
+        open: true,
+        message: 'Error al actualizar el estado'
+      });
+    }
+  };
+
+  // Función para eliminar un rol
+  const handleDelete = async (rol) => {
+    const confirmDelete = window.confirm(`¿Está seguro de eliminar el rol ${rol.nombre}?`);
+    if (confirmDelete) {
+      try {
+        await axios.delete(`http://localhost:3000/api/roles/${rol._id}`);
+        await fetchRoles();
+        setAlert({
+          open: true,
+          message: 'Rol eliminado correctamente'
+        });
+      } catch (error) {
+        console.error('Error al eliminar rol:', error);
+        setAlert({
+          open: true,
+          message: 'Error al eliminar el rol'
+        });
+      }
+    }
+  };
+
+  // Función para manejar el envío del formulario
+  const handleSubmit = async (formData) => {
+    try {
+      console.log('=== INICIANDO ENVÍO DE FORMULARIO ===');
+      console.log('Datos del formulario recibidos:', JSON.stringify(formData, null, 2));
+      
+      // Validar que los datos existan
+      if (!formData) {
+        setAlert({
+          open: true,
+          message: 'No se recibieron datos del formulario'
+        });
+        return;
+      }
+
+      // Extraer y limpiar los datos
+      const nombre = formData.nombre?.toString().trim();
+      const descripcion = formData.descripcion?.toString().trim();
+      
+      // Validaciones
+      if (!nombre || nombre.length < 3) {
+        setAlert({
+          open: true,
+          message: 'El nombre es obligatorio y debe tener al menos 3 caracteres'
+        });
+        return;
+      }
+
+      if (!descripcion || descripcion.length < 10) {
+        setAlert({
+          open: true,
+          message: 'La descripción es obligatoria y debe tener al menos 10 caracteres'
+        });
+        return;
+      }
+
+      // Validar estructura de permisos
+      if (!formData.permisos) {
+        setAlert({
+          open: true,
+          message: 'Error: No se encontraron datos de permisos'
+        });
+        return;
+      }
+
+      // Convertir permisos a array si es necesario
+      let permisosArray = [];
+      if (Array.isArray(formData.permisos)) {
+        permisosArray = formData.permisos;
+      } else if (typeof formData.permisos === 'object') {
+        permisosArray = Object.values(formData.permisos);
+      } else {
+        setAlert({
+          open: true,
+          message: 'Error en la estructura de permisos'
+        });
+        return;
+      }
+
+      console.log('Permisos como array:', permisosArray);
+
+      // Verificar que tenemos permisos y privilegios disponibles
+      if (!permisos || permisos.length === 0) {
+        setAlert({
+          open: true,
+          message: 'Error: No se han cargado los permisos disponibles'
+        });
+        return;
+      }
+
+      if (!privilegios || privilegios.length === 0) {
+        setAlert({
+          open: true,
+          message: 'Error: No se han cargado los privilegios disponibles'
+        });
+        return;
+      }
+
+      // Transformar permisos a IDs de privilegios
+      const { permisosIds, privilegiosIds } = transformPermisosToIds(
+        permisosArray,
+        permisos,
+        privilegios
+      );
+
+      if (permisosIds.length === 0 || privilegiosIds.length === 0) {
+        setAlert({
+          open: true,
+          message: 'Debe seleccionar al menos un permiso con sus privilegios'
+        });
+        return;
+      }
+
+      // Preparar datos para envío
+      const dataToSend = {
+        nombre: nombre,
+        descripcion: descripcion,
+        estado: formData.estado !== undefined ? Boolean(formData.estado) : true,
+        permisos: permisosIds,
+        privilegios: privilegiosIds
+      };
+
+      console.log('Datos preparados para envío:', JSON.stringify(dataToSend, null, 2));
+
+      // Configurar headers
+      const config = {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        timeout: 10000
+      };
+
+      let response;
+      if (isEditing && selectedRol?._id) {
+        console.log('Actualizando rol existente...');
+        response = await axios.put(
+          `http://localhost:3000/api/roles/${selectedRol._id}`, 
+          dataToSend,
+          config
+        );
+        setAlert({
+          open: true,
+          message: 'Rol actualizado correctamente'
+        });
+      } else {
+        console.log('Creando nuevo rol...');
+        response = await axios.post(
+          'http://localhost:3000/api/roles', 
+          dataToSend,
+          config
+        );
+        setAlert({
+          open: true,
+          message: 'Rol creado correctamente'
+        });
+      }
+
+      console.log('Respuesta del servidor:', response.data);
+      console.log('=== ENVÍO EXITOSO ===');
+      
+      // Actualizar la lista y cerrar modal
+      await fetchRoles();
+      handleCloseForm();
+
+    } catch (error) {
+      console.error('=== ERROR AL ENVIAR DATOS ===');
+      console.error('Error completo:', error);
+      
+      let errorMessage = 'Error al guardar el rol';
+      
+      if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Tiempo de espera agotado. Verifique la conexión con el servidor.';
+      } else if (error.response) {
+        console.error('Status:', error.response.status);
+        console.error('Datos del error:', error.response.data);
+        
+        // Mostrar más detalles del error de validación
+        if (error.response.status === 400) {
+          if (error.response.data?.message) {
+            errorMessage = `Error de validación: ${error.response.data.message}`;
+          } else if (error.response.data?.details) {
+            errorMessage = error.response.data.details;
+          } else if (error.response.data?.errors) {
+            // Si hay errores de validación específicos
+            const errores = Object.values(error.response.data.errors).join(', ');
+            errorMessage = `Errores de validación: ${errores}`;
+          } else {
+            errorMessage = 'Datos inválidos. Verifique la información ingresada.';
+          }
+        } else if (error.response.status === 409) {
+          errorMessage = 'Ya existe un rol con ese nombre.';
+        } else if (error.response.status === 500) {
+          errorMessage = 'Error interno del servidor.';
+        } else {
+          errorMessage = `Error del servidor: ${error.response.status}`;
+        }
+      } else if (error.request) {
+        errorMessage = 'No se pudo conectar con el servidor. Verifique que esté ejecutándose.';
+      } else {
+        errorMessage = `Error de configuración: ${error.message}`;
+      }
+      
+      console.error('=== FIN ERROR ===');
+      
+      setAlert({
+        open: true,
+        message: errorMessage
+      });
+    }
+  };
+
+  // Funciones auxiliares para manejar modales
+  const handleEdit = (rol) => {
+    setIsEditing(true);
+    setSelectedRol(rol);
+    setFormModalOpen(true);
+  };
+
+  const handleView = (rol) => {
+    setSelectedRol(rol);
+    setDetailModalOpen(true);
+  };
 
   const handleCloseDetail = () => {
-    setDetailModalOpen(false)
-    setSelectedRole(null)
-  }
+    setDetailModalOpen(false);
+    setSelectedRol(null);
+  };
 
   const handleCloseForm = () => {
-    setFormModalOpen(false)
-    setSelectedRole(null)
-    setIsEditing(false)
-  }
+    setFormModalOpen(false);
+    setSelectedRol(null);
+    setIsEditing(false);
+  };
 
-  const handleSubmit = (formData) => {
-    if (isEditing) {
-      setRoles((prev) =>
-        prev.map((item) =>
-          item.id === selectedRole.id
-            ? {
-                ...formData,
-                id: item.id,
-                fecha: item.fecha,
-                privileges: item.privileges || [],
-                viewPermissions: item.viewPermissions || [],
-              }
-            : item,
-        ),
-      )
-      showSuccessAlert(`El rol ${formData.nombre} ha sido actualizado correctamente`)
-    } else {
-      // Generate a new ID for new roles
-      const newId = Math.max(...roles.map((r) => r.id)) + 1
-      const today = new Date().toLocaleDateString()
-      setRoles((prev) => [
-        ...prev,
-        {
-          ...formData,
-          id: newId,
-          fecha: today,
-          privileges: [],
-          viewPermissions: [],
-        },
-      ])
-      showSuccessAlert(`El rol ${formData.nombre} ha sido creado correctamente`)
-    }
-    handleCloseForm()
-  }
+  const handleCloseAlert = () => {
+    setAlert({
+      ...alert,
+      open: false
+    });
+  };
 
-  const handleToggleStatus = (roleId) => {
-    setRoles((prev) => prev.map((item) => (item.id === roleId ? { ...item, estado: !item.estado } : item)))
-  }
-
-  const handleAssignPrivileges = (role) => {
-    setSelectedRole(role)
-    setPrivilegeAssignmentOpen(true)
-  }
-
-  const handleAssignViewPermissions = (role) => {
-    setSelectedRole(role)
-    setViewPermissionAssignmentOpen(true)
-  }
-
-  const handleSavePrivilegeAssignment = (data) => {
-    const { roleId, privilegeIds } = data
-
-    // Actualizar el rol con los privilegios asignados
-    setRoles((prev) => {
-      const updatedRoles = prev.map((role) => {
-        if (role.id === roleId) {
-          // Obtener los objetos de privilegio completos basados en los IDs
-          const assignedPrivileges = privilegios.filter((priv) => privilegeIds.includes(priv.id))
-
-          return {
-            ...role,
-            privileges: assignedPrivileges,
-          }
-        }
-        return role
-      })
-      
-      const updatedRole = updatedRoles.find(role => role.id === roleId)
-      showSuccessAlert(`Privilegios actualizados para el rol ${updatedRole.nombre}`)
-      return updatedRoles
-    })
-  }
-
-  const handleSaveViewPermissionAssignment = (data) => {
-    const { roleId, viewPermissions } = data
-
-    // Actualizar el rol con los permisos de vista asignados
-    setRoles((prev) =>
-      prev.map((role) => {
-        if (role.id === roleId) {
-          return {
-            ...role,
-            viewPermissions,
-          }
-        }
-        return role
-      }),
-    )
-  }
-
-  const countViewPermissions = (role) => {
-    if (!role.viewPermissions) return 0
-    return role.viewPermissions.length
-  }
-
-  // Modify the columns array to match the wireframe
+  // Definición de columnas para la tabla
   const columns = [
-    { id: "id", label: "ID" },
-    { id: "nombre", label: "Nombre" },
-    { id: "descripcion", label: "Descripción" },
-    { id: "fecha", label: "Fecha" },
-    {
-      id: "estado",
-      label: "Estado",
-      render: (value, row) => <StatusButton active={value} onClick={() => handleToggleStatus(row.id)} />,
-    }
-  ]
-
-  const detailFields = [
-    { id: "id", label: "IDENTIFICACIÓN" },
-    { id: "nombre", label: "Nombre" },
-    { id: "descripcion", label: "Descripción" },
-    { id: "fecha", label: "Fecha de creación" },
-    {
-      id: "viewPermissions",
-      label: "Vistas y Privilegios",
+    { id: 'nombre', label: 'Nombre del Rol' },
+    { id: 'descripcion', label: 'Descripción' },
+    { 
+      id: 'estado', 
+      label: 'Estado',
       render: (value, row) => (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {value?.map((permission) => (
-            <Box key={permission} sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, boxShadow: 1 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 500 }}>
-                {permission.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' - ')}
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                {row.privileges.map((priv) => (
-                  <Chip
-                    key={`${permission}-${priv.id}`}
-                    label={priv.nombre_privilegio}
-                    size="small"
-                    color="primary"
-                    variant="outlined"
-                  />
-                ))}
-              </Box>
-            </Box>
-          ))}
-        </Box>
-      ),
+        <StatusButton 
+          active={value === true}
+          onClick={() => handleToggleStatus(row._id)}
+        />
+      )
+    }
+  ];
+
+  // Campos para el modal de detalles
+  const detailFields = [
+    { id: 'nombre', label: 'Nombre del Rol' },
+    { id: 'descripcion', label: 'Descripción' },
+    { id: 'estado', label: 'Estado', render: (value) => <StatusButton active={value === true} /> },
+    { 
+      id: 'permisos', 
+      label: 'Permisos',
+      render: (permisos) => {
+        if (!Array.isArray(permisos) || permisos.length === 0) return 'No hay permisos asignados';
+        return (
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {permisos.map((permiso, index) => (
+              <li key={index}>{permiso.permiso || permiso.nombre}</li>
+            ))}
+          </ul>
+        );
+      }
     },
     { 
-      id: "estado", 
-      label: "Estado", 
-      render: (value) => <StatusButton active={value} /> 
-    },
-  ]
+      id: 'privilegios', 
+      label: 'Privilegios',
+      render: (privilegios) => {
+        if (!Array.isArray(privilegios) || privilegios.length === 0) return 'No hay privilegios asignados';
+        return (
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {privilegios.map((privilegio, index) => (
+              <li key={index}>{privilegio.nombre_privilegio || privilegio.nombre}</li>
+            ))}
+          </ul>
+        );
+      }
+    }
+  ];
 
+  // Campos para el formulario
   const formFields = [
-    {
-      id: "nombre",
-      label: "Nombre",
-      type: "text",
+    { 
+      id: 'nombre', 
+      label: 'Nombre del Rol', 
+      type: 'text',
       required: true,
-      size: "small"
+      disabled: isEditing,
+      minLength: 3,
+      maxLength: 50,
+      placeholder: 'Ej: Administrador, Usuario, Editor'
     },
-    {
-      id: "descripcion",
-      label: "Descripción",
-      type: "text",
+    { 
+      id: 'descripcion', 
+      label: 'Descripción', 
+      type: 'text',
       required: true,
-      size: "small"
+      minLength: 10,
+      maxLength: 200,
+      placeholder: 'Ej: Rol con acceso completo al sistema de administración'
     },
-    {
-      id: "permissions",
-      type: "permissionsTable",
-      section: "Permisos",
-      modules: [
-        {
-          id: "panel",
-          label: "Dashboard",
-        },
-        {
-          id: "profesores",
-          label: "Profesores"
-        },
-        {
-          id: "programacion-profesores",
-          label: "Programación de Profesores"
-        },
-        {
-          id: "programacion-clases",
-          label: "Programación de Clases"
-        },
-        {
-          id: "cursos-matriculas",
-          label: "Cursos/Matrículas"
-        },
-        {
-          id: "aulas",
-          label: "Aulas"
-        },
-        {
-          id: "clases",
-          label: "Clases"
-        },
-        {
-          id: "clientes",
-          label: "Clientes"
-        },
-        {
-          id: "estudiantes",
-          label: "Beneficiarios"
-        },
-        {
-          id: "venta-matriculas",
-          label: "Venta de Matrículas"
-        },
-        {
-          id: "venta-cursos",
-          label: "Venta de Cursos"
-        },
-        {
-          id: "asistencia",
-          label: "Asistencia"
-        },
-        {
-          id: "pagos",
-          label: "Pagos"
-        },
-        {
-          id: "usuarios",
-          label: "Usuarios"
-        },
-        {
-          id: "roles",
-          label: "Roles"
-        }
+    { 
+      id: 'permisos',
+      label: 'Permisos',
+      type: 'table',
+      required: true,
+      columns: [
+        { id: 'modulo', label: 'Módulo' },
+        { id: 'ver', label: 'Ver', type: 'checkbox' },
+        { id: 'crear', label: 'Crear', type: 'checkbox' },
+        { id: 'editar', label: 'Editar', type: 'checkbox' },
+        { id: 'eliminar', label: 'Eliminar', type: 'checkbox' },
+        { id: 'descargar', label: 'Descargar', type: 'checkbox' }
       ],
-      sx: {
-        '& .MuiTableContainer-root': {
-          maxHeight: '300px',
-          overflowX: 'hidden',
-          '& .MuiTableCell-root': {
-            padding: '4px 6px',
-            fontSize: '0.813rem'
-          },
-          '& .MuiTableCell-head': {
-            backgroundColor: '#f5f5f5',
-            fontWeight: 600,
-            textDecoration: 'none'
-          }
-        },
-        '& .MuiCheckbox-root': {
-          padding: '2px'
-        },
-        '& .MuiFormGroup-root': {
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-start',
-          width: '100%',
-          maxWidth: '500px',
-          margin: '0 auto',
-          '& .MuiFormControlLabel-root': {
-            width: '100%',
-            margin: '2px 0',
-            paddingLeft: '8px'
-          }
+      // Usar los permisos (módulos) para generar las filas
+      rows: permisos.length > 0 ? permisos.map(permiso => ({
+        modulo: permiso.permiso || permiso.nombre,
+        ver: false,
+        crear: false,
+        editar: false,
+        eliminar: false,
+        descargar: false
+      })) : [],
+      validate: (value) => {
+        if (!value || !Object.values(value).some(row => 
+          row.ver || row.crear || row.editar || row.eliminar || row.descargar
+        )) {
+          return 'Debe seleccionar al menos un permiso';
         }
-      },
-      actions: ["visualizar", "crear", "editar", "eliminar"]
+        return null;
+      }
     },
-    {
-      id: "estado",
-      label: "Estado",
-      type: "switch",
+    { 
+      id: 'estado', 
+      label: 'Estado', 
+      type: 'switch',
       defaultValue: true
     }
-  ]
+  ];
 
   return (
     <>
@@ -434,52 +541,34 @@ const Roles = () => {
         columns={columns}
         onEdit={handleEdit}
         onDelete={handleDelete}
-        onCreate={handleCreate}
         onView={handleView}
-        title="Roles"
-        searchFields={["nombre", "descripcion"]} // Add searchable fields
+        title="Gestión de Roles"
       />
-
+      
       <DetailModal
-        title={`Detalle del Rol: ${selectedRole?.nombre}`}
-        data={selectedRole}
+        title={`Detalle del Rol ${selectedRol?.nombre || ''}`}
+        data={selectedRol}
         fields={detailFields}
         open={detailModalOpen}
         onClose={handleCloseDetail}
       />
 
-      <FormModal  // This should match the import name
-            title={isEditing ? "Editar Rol" : "Crear Nuevo Rol"}
-            fields={formFields}
-            initialData={selectedRole}
-            open={formModalOpen}
-            onClose={handleCloseForm}
-            onSubmit={handleSubmit}
-          />
-
-      <RolePrivilegeAssignment
-        open={privilegeAssignmentOpen}
-        onClose={() => setPrivilegeAssignmentOpen(false)}
-        role={selectedRole}
-        allPrivileges={privilegios}
-        onSave={handleSavePrivilegeAssignment}
+      <FormModal
+        title={isEditing ? 'Editar Rol' : 'Crear Nuevo Rol'}
+        fields={formFields}
+        initialData={selectedRol}
+        open={formModalOpen}
+        onClose={handleCloseForm}
+        onSubmit={handleSubmit}
       />
-
-      <RoleViewPermissionAssignment
-        open={viewPermissionAssignmentOpen}
-        onClose={() => setViewPermissionAssignmentOpen(false)}
-        role={selectedRole}
-        onSave={handleSaveViewPermissionAssignment}
-      />
-
-      {/* Asegúrate de que el componente SuccessAlert esté incluido en el renderizado */}
-      <SuccessAlert 
-        open={successAlert.open} 
-        message={successAlert.message} 
-        onClose={handleCloseSuccessAlert} 
+      
+      <SuccessAlert
+        open={alert.open}
+        message={alert.message}
+        onClose={handleCloseAlert}
       />
     </>
-  )
-}
+  );
+};
 
-export default Roles
+export default Roles;

@@ -21,7 +21,7 @@ const ProgramacionProfesores = lazy(() => import('./features/servicios-musicales
 const CursosMatriculas = lazy(() => import('./features/servicios-musicales/pages/CursosMatriculas'));
 const Aulas = lazy(() => import('./features/servicios-musicales/pages/Aulas'));
 const Clases = lazy(() => import('./features/servicios-musicales/pages/Clases'));
-const ProgramacionClases = lazy(() => import('./features/servicios-musicales/pages/ProgramacionClases')); // Importación adicional
+const ProgramacionClases = lazy(() => import('./features/servicios-musicales/pages/ProgramacionClases'));
 
 // Rutas de venta de servicios
 const Clientes = lazy(() => import('./features/venta-servicios/pages/Clientes'));
@@ -95,8 +95,7 @@ export const router = createBrowserRouter([
                 <Usuarios />
               </ProtectedRoute>
             )
-          },
-       
+          }
         ]
       },
       // Rutas de servicios musicales
@@ -120,7 +119,7 @@ export const router = createBrowserRouter([
             )
           },
           {
-            path: 'programacion-clases', // Ruta adicional
+            path: 'programacion-clases',
             element: (
               <ProtectedRoute requiredPermissions={['servicios-musicales-programacion-clases']}>
                 <ProgramacionClases />
@@ -204,8 +203,7 @@ export const router = createBrowserRouter([
                 <Asistencia />
               </ProtectedRoute>
             )
-          },
-        
+          }
         ]
       }
     ]

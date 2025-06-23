@@ -1,0 +1,1 @@
+{"name":"apimga","version":"1.0.0","description":"Local API with MongoDB integration","main":"index.js","scripts":{"start":"node index.js","dev":"nodemon index.js"},"dependencies":{"bcryptjs":"^3.0.2","cors":"^2.8.5","dotenv":"^16.5.0","express":"^4.21.2","mongoose":"^8.15.1"},"devDependencies":{"nodemon":"^3.1.10"}}

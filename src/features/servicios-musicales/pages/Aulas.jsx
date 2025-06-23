@@ -1,56 +1,46 @@
-import { useState } from 'react';
-import { GenericList2 } from "../../../shared/components/genericlist2"; // Changed to named import with curly braces
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+import { GenericList2 } from "../../../shared/components/genericlist2";
 import { DetailModal } from '../../../shared/components/DetailModal';
 import { StatusButton } from '../../../shared/components/StatusButton';
-import { FormModal } from '../../../shared/components/formModal2'; // Fixed capitalization of FormModal2
+import { FormModal } from '../../../shared/components/formModal2';
 import { SuccessAlert } from '../../../shared/components/SuccessAlert';
 
 const Aulas = () => {
-  // Add columns definition
   const columns = [
-    { id: 'id', label: 'Número de Aula' },
+    { id: 'numeroAula', label: 'Número de Aula' },
     { id: 'capacidad', label: 'Capacidad' },
-    { id: 'ubicacion', label: 'Ubicación' },
     { 
       id: 'estado', 
       label: 'Estado',
       render: (value, row) => (
         <StatusButton 
-          active={value} 
-          onClick={() => handleToggleStatus(row.id)}
+          active={value === 'Activo'} 
+          onClick={() => handleToggleStatus(row._id)}
         />
       )
     }
   ];
 
-  const [aulas, setAulas] = useState([
-    { id: 'A01', capacidad: 5, estado: true, ubicacion: 'Edificio Principal, Planta Baja' },
-    { id: 'A02', capacidad: 8, estado: true, ubicacion: 'Edificio Principal, Primer Piso' },
-    { id: 'A03', capacidad: 3, estado: true, ubicacion: 'Ala de Ciencias, Planta Baja' },
-    { id: 'A04', capacidad: 5, estado: true, ubicacion: 'Edificio Principal, Segundo Piso' },
-    { id: 'A05', capacidad: 4, estado: true, ubicacion: 'Edificio de Artes, Planta Baja' },
-    { id: 'A06', capacidad: 3, estado: true, ubicacion: 'Edificio Principal, Primer Piso' },
-    { id: 'A07', capacidad: 6, estado: true, ubicacion: 'Ala de Tecnología, Segundo Piso' },
-    { id: 'A08', capacidad: 7, estado: true, ubicacion: 'Edificio Principal, Tercer Piso' },
-    { id: 'A09', capacidad: 4, estado: true, ubicacion: 'Edificio de Idiomas, Planta Baja' },
-    { id: 'A10', capacidad: 5, estado: true, ubicacion: 'Edificio Principal, Primer Piso' },
-  ]);
-
+  const [aulas, setAulas] = useState([]);
   const [selectedAula, setSelectedAula] = useState(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [alert, setAlert] = useState({
+    open: false,
+    message: ''
+  });
 
   const detailFields = [
-    { id: 'id', label: 'Número de Aula' },
+    { id: 'numeroAula', label: 'Número de Aula' },
     { id: 'capacidad', label: 'Capacidad', render: (value) => `${value} beneficiarios` },
-    { id: 'ubicacion', label: 'Ubicación' },
-    { id: 'estado', label: 'Estado', render: (value) => <StatusButton active={value} /> }
+    { id: 'estado', label: 'Estado', render: (value) => <StatusButton active={value === 'Activo'} /> }
   ];
 
   const formFields = [
     { 
-      id: 'id', 
+      id: 'numeroAula', 
       label: 'Número de Aula', 
       type: 'text',
       required: true,
@@ -64,24 +54,116 @@ const Aulas = () => {
       min: 1
     },
     { 
-      id: 'ubicacion', 
-      label: 'Ubicación', 
-      type: 'text',
-      required: true
-    },
-    { 
       id: 'estado', 
       label: 'Estado', 
       type: 'switch',
-      defaultValue: true
+      defaultValue: 'Activo'
     }
   ];
 
-  // Add this handler with your other handlers
-  const handleToggleStatus = (aulaId) => {
-    setAulas(prev => prev.map(aula => 
-      aula.id === aulaId ? { ...aula, estado: !aula.estado } : aula
-    ));
+  const fetchAulas = async () => {
+    try {
+      const response = await axios.get('http://localhost:3000/api/aulas');
+      setAulas(response.data);
+    } catch (error) {
+      console.error('Error fetching aulas:', error);
+      setAlert({
+        open: true,
+        message: 'Error al cargar las aulas'
+      });
+    }
+  };
+
+  useEffect(() => {
+    fetchAulas();
+  }, []);
+
+  const handleToggleStatus = async (aulaId) => {
+    try {
+      const aula = aulas.find(a => a._id === aulaId);
+      if (!aula) return;
+
+      const nuevoEstado = aula.estado === 'Activo' ? 'Inactivo' : 'Activo';
+      
+      // Actualizar primero en el frontend
+      setAulas(prevAulas => prevAulas.map(a => 
+        a._id === aulaId ? { ...a, estado: nuevoEstado } : a
+      ));
+
+      // Luego actualizar en la API
+      await axios.put(`http://localhost:3000/api/aulas/${aulaId}`, { 
+        ...aula,
+        estado: nuevoEstado 
+      });
+
+      setAlert({
+        open: true,
+        message: 'Estado actualizado correctamente'
+      });
+    } catch (error) {
+      // Si hay error, revertimos el cambio en el frontend
+      setAulas(prevAulas => prevAulas.map(a => 
+        a._id === aulaId ? { ...a, estado: aula.estado } : a
+      ));
+      
+      console.error('Error updating aula status:', error);
+      setAlert({
+        open: true,
+        message: 'Error al actualizar el estado'
+      });
+    }
+};
+
+  const handleDelete = async (aula) => {
+    const confirmDelete = window.confirm(`¿Está seguro de eliminar el aula ${aula.numeroAula}?`);
+    if (confirmDelete) {
+      try {
+        await axios.delete(`http://localhost:3000/api/aulas/${aula._id}`);
+        await fetchAulas(); // Recargar los datos después de eliminar
+        setAlert({
+          open: true,
+          message: 'Aula eliminada correctamente'
+        });
+      } catch (error) {
+        console.error('Error deleting aula:', error);
+        setAlert({
+          open: true,
+          message: 'Error al eliminar el aula'
+        });
+      }
+    }
+  };
+
+  const handleSubmit = async (formData) => {
+    try {
+      const dataToSend = {
+        numeroAula: formData.numeroAula,
+        capacidad: parseInt(formData.capacidad),
+        estado: formData.estado || 'Activo'
+      };
+
+      if (isEditing && selectedAula?._id) {
+        await axios.put(`http://localhost:3000/api/aulas/${selectedAula._id}`, dataToSend);
+        setAlert({
+          open: true,
+          message: 'Aula editada correctamente'
+        });
+      } else {
+        await axios.post('http://localhost:3000/api/aulas', dataToSend);
+        setAlert({
+          open: true,
+          message: 'Aula creada correctamente'
+        });
+      }
+      await fetchAulas(); // Recargar los datos después de crear/editar
+      handleCloseForm();
+    } catch (error) {
+      console.error('Error saving aula:', error);
+      setAlert({
+        open: true,
+        message: 'Error al guardar el aula'
+      });
+    }
   };
 
   const handleCreate = () => {
@@ -94,13 +176,6 @@ const Aulas = () => {
     setIsEditing(true);
     setSelectedAula(aula);
     setFormModalOpen(true);
-  };
-
-  const handleDelete = (aula) => {
-    const confirmDelete = window.confirm(`¿Está seguro de eliminar el aula ${aula.id}?`);
-    if (confirmDelete) {
-      setAulas(prev => prev.filter(item => item.id !== aula.id));
-    }
   };
 
   const handleView = (aula) => {
@@ -119,13 +194,6 @@ const Aulas = () => {
     setIsEditing(false);
   };
 
-  // Add alert state
-  const [alert, setAlert] = useState({
-    open: false,
-    message: ''
-  });
-
-  // Add alert close handler
   const handleCloseAlert = () => {
     setAlert({
       ...alert,
@@ -133,36 +201,32 @@ const Aulas = () => {
     });
   };
 
-  // Modify handleSubmit to include alerts
-  const handleSubmit = (formData) => {
-    const aulaData = {
-      ...formData,
-      id: formData.codigo
-    };
+  // Agregar este estado después de las otras declaraciones de estado
+  const [filtroEstado, setFiltroEstado] = useState('todos');
 
-    if (isEditing) {
-      setAulas(prev => prev.map(item => 
-        item.id === selectedAula.id ? aulaData : item
-      ));
-      setAlert({
-        open: true,
-        message: 'Aula editada correctamente'
-      });
-    } else {
-      setAulas(prev => [...prev, aulaData]);
-      setAlert({
-        open: true,
-        message: 'Aula creada correctamente'
-      });
-    }
-    handleCloseForm();
-  };
+  // Agregar esta función para filtrar las aulas
+  const aulasFiltradas = aulas.filter(aula => {
+    if (filtroEstado === 'todos') return true;
+    return aula.estado === filtroEstado;
+  });
 
-  // Add SuccessAlert component to the return statement
+  // Modificar el return para agregar el filtro y usar aulasFiltradas
   return (
     <>
-      <GenericList2 // Changed from GenericList to GenericList2
-        data={aulas}
+      <div style={{ marginBottom: '1rem' }}>
+        <select 
+          value={filtroEstado} 
+          onChange={(e) => setFiltroEstado(e.target.value)}
+          style={{ padding: '0.5rem' }}
+        >
+          <option value="todos">Todos</option>
+          <option value="Activo">Activos</option>
+          <option value="Inactivo">Inactivos</option>
+        </select>
+      </div>
+
+      <GenericList2
+        data={aulasFiltradas}
         columns={columns}
         onEdit={handleEdit}
         onDelete={handleDelete}
@@ -172,7 +236,7 @@ const Aulas = () => {
       />
       
       <DetailModal
-        title={`Detalle del Aula ${selectedAula?.id}`}
+        title={`Detalle del Aula ${selectedAula?.numeroAula}`}
         data={selectedAula}
         fields={detailFields}
         open={detailModalOpen}

@@ -18,22 +18,18 @@ const Clientes = () => {
 
   const fetchClientes = async () => {
     try {
-      // Obtener beneficiarios
-      const beneficiariosResponse = await axios.get('http://localhost:3001/api/beneficiarios');
+      const beneficiariosResponse = await axios.get('http://localhost:3000/api/beneficiarios');
       const beneficiarios = beneficiariosResponse.data;
-      
-      // Obtener usuarios_has_rol
-      const usuariosHasRolResponse = await axios.get('http://localhost:3001/api/usuarios_has_rol');
+
+      const usuariosHasRolResponse = await axios.get('http://localhost:3000/api/usuarios-has-rol');
       const usuariosHasRol = usuariosHasRolResponse.data;
 
-      // Filtrar beneficiarios que son clientes (clienteId === _id)
-      const clientesFiltrados = beneficiarios.filter(beneficiario => 
-        beneficiario.clienteId === beneficiario._id
+      const clientesFiltrados = beneficiarios.filter(
+        beneficiario =>
+          beneficiario.clienteId === beneficiario._id || beneficiario.clienteId === 'cliente'
       );
 
-      // Mapear los datos incluyendo el correo desde usuario_has_rol
       const clientesFormateados = clientesFiltrados.map(cliente => {
-        // Buscar el usuario_has_rol correspondiente
         const usuarioHasRol = usuariosHasRol.find(u => u._id === cliente.usuario_has_rolId);
         const correo = usuarioHasRol?.usuarioId?.correo || '';
 
@@ -47,7 +43,7 @@ const Clientes = () => {
           direccion: cliente.direccion,
           telefono: cliente.telefono,
           correo: correo,
-          estado: cliente.estado !== undefined ? cliente.estado : true // Usar el estado del beneficiario si existe
+          estado: cliente.estado !== undefined ? cliente.estado : true
         };
       });
 
@@ -71,36 +67,32 @@ const Clientes = () => {
 
   const handleSubmit = async (formData) => {
     try {
-      // Primero crear o actualizar el usuario
       const usuarioData = {
         correo: formData.correo,
-        contrasena: 'default123', // Contraseña por defecto para nuevos usuarios
+        contrasena: 'default123',
         rol: 'usuario',
         estado: true
       };
 
       let usuarioId;
+      let usuario_has_rolId;
+
       if (isEditing) {
-        // Obtener el usuario_has_rol actual
-        const usuarioHasRolResponse = await axios.get(`http://localhost:3001/api/usuarios_has_rol/${selectedCliente.usuario_has_rolId}`);
+        const usuarioHasRolResponse = await axios.get(`http://localhost:3000/api/usuarios_has_rol/${selectedCliente.usuario_has_rolId}`);
         usuarioId = usuarioHasRolResponse.data.usuarioId._id;
-        // Actualizar usuario existente
-        await axios.put(`http://localhost:3001/api/usuarios/${usuarioId}`, usuarioData);
+        await axios.put(`http://localhost:3000/api/usuarios/${usuarioId}`, usuarioData);
       } else {
-        // Crear nuevo usuario
-        const usuarioResponse = await axios.post('http://localhost:3001/api/usuarios', usuarioData);
+        const usuarioResponse = await axios.post('http://localhost:3000/api/usuarios', usuarioData);
         usuarioId = usuarioResponse.data._id;
 
-        // Crear usuario_has_rol
         const usuarioHasRolData = {
           usuarioId: usuarioId,
-          rolId: '68405b59e6b8f374e31cc748' // ID del rol por defecto
+          rolId: '68405b59e6b8f374e31cc748'
         };
-        const usuarioHasRolResponse = await axios.post('http://localhost:3001/api/usuarios_has_rol', usuarioHasRolData);
-        var usuario_has_rolId = usuarioHasRolResponse.data._id;
+        const usuarioHasRolResponse = await axios.post('http://localhost:3000/api/usuarios_has_rol', usuarioHasRolData);
+        usuario_has_rolId = usuarioHasRolResponse.data._id;
       }
 
-      // Preparar datos del beneficiario
       const beneficiarioData = {
         nombre: formData.nombre,
         apellido: formData.apellido,
@@ -114,17 +106,16 @@ const Clientes = () => {
       };
 
       if (isEditing) {
-        await axios.put(`http://localhost:3001/api/beneficiarios/${selectedCliente.id}`, beneficiarioData);
+        await axios.put(`http://localhost:3000/api/beneficiarios/${selectedCliente.id}`, beneficiarioData);
       } else {
-        const response = await axios.post('http://localhost:3001/api/beneficiarios', beneficiarioData);
-        // Asignar el mismo _id como clienteId
-        await axios.put(`http://localhost:3001/api/beneficiarios/${response.data._id}`, {
+        const response = await axios.post('http://localhost:3000/api/beneficiarios', beneficiarioData);
+        await axios.put(`http://localhost:3000/api/beneficiarios/${response.data._id}`, {
           ...response.data,
           clienteId: response.data._id
         });
       }
 
-      fetchClientes(); // Recargar la lista de clientes
+      fetchClientes();
       handleCloseForm();
     } catch (error) {
       console.error('Error al guardar el cliente:', error);
@@ -135,8 +126,8 @@ const Clientes = () => {
     const confirmDelete = window.confirm(`¿Está seguro de eliminar el cliente ${cliente.nombre}?`);
     if (confirmDelete) {
       try {
-        await axios.delete(`http://localhost:3001/api/beneficiarios/${cliente.id}`);
-        fetchClientes(); // Recargar la lista de clientes
+        await axios.delete(`http://localhost:3000/api/beneficiarios/${cliente.id}`);
+        fetchClientes();
       } catch (error) {
         console.error('Error al eliminar el cliente:', error);
       }
@@ -165,11 +156,9 @@ const Clientes = () => {
     const hoy = new Date();
     let edad = hoy.getFullYear() - fechaNac.getFullYear();
     const mes = hoy.getMonth() - fechaNac.getMonth();
-    
     if (mes < 0 || (mes === 0 && hoy.getDate() < fechaNac.getDate())) {
       edad--;
     }
-    
     return edad;
   };
 
@@ -179,13 +168,13 @@ const Clientes = () => {
       if (!cliente) return;
 
       const updatedStatus = !cliente.estado;
-      
-      await axios.put(`http://localhost:3001/api/beneficiarios/${clienteId}`, {
+
+      await axios.put(`http://localhost:3000/api/beneficiarios/${clienteId}`, {
         ...cliente,
         estado: updatedStatus
       });
 
-      fetchClientes(); // Recargar la lista de clientes
+      fetchClientes();
     } catch (error) {
       console.error('Error al actualizar el estado del cliente:', error);
     }
@@ -200,12 +189,16 @@ const Clientes = () => {
     { id: 'direccion', label: 'Dirección' },
     { id: 'telefono', label: 'Teléfono' },
     { id: 'correo', label: 'Correo' },
-    { id: 'estado', label: 'Estado', render: (value, row) => (
-      <StatusButton
-        active={value}
-        onClick={() => handleToggleStatus(row?.id)}
-      />
-    )},
+    {
+      id: 'estado',
+      label: 'Estado',
+      render: (value, row) => (
+        <StatusButton
+          active={value}
+          onClick={() => handleToggleStatus(row?.id)}
+        />
+      )
+    }
   ];
 
   const detailFields = [
@@ -217,21 +210,25 @@ const Clientes = () => {
     { id: 'direccion', label: 'Dirección' },
     { id: 'telefono', label: 'Teléfono' },
     { id: 'correo', label: 'Correo Electrónico' },
-    { id: 'estado', label: 'Estado', render: (value, row) => (
-      <StatusButton
-        active={value}
-        onClick={() => handleToggleStatus(row?.id)}
-      />
-    )},
+    {
+      id: 'estado',
+      label: 'Estado',
+      render: (value, row) => (
+        <StatusButton
+          active={value}
+          onClick={() => handleToggleStatus(row?.id)}
+        />
+      )
+    }
   ];
 
   const formFields = [
     { id: 'nombre', label: 'Nombre', type: 'text', required: true },
     { id: 'apellido', label: 'Apellido', type: 'text', required: true },
-    { 
-      id: 'tipoDocumento', 
-      label: 'Tipo Documento', 
-      type: 'select', 
+    {
+      id: 'tipoDocumento',
+      label: 'Tipo Documento',
+      type: 'select',
       options: [
         { value: 'CC', label: 'Cédula de Ciudadanía (CC)' },
         { value: 'TI', label: 'Tarjeta de Identidad (TI)' },
@@ -240,7 +237,7 @@ const Clientes = () => {
         { value: 'RC', label: 'Registro Civil (RC)' },
         { value: 'NIT', label: 'NIT' }
       ],
-      required: true 
+      required: true
     },
     { id: 'numeroDocumento', label: 'N° Documento', type: 'text', required: true },
     { id: 'fechaNacimiento', label: 'Fecha de Nacimiento', type: 'date', required: true },
@@ -250,8 +247,7 @@ const Clientes = () => {
     { id: 'acudiente', label: 'Beneficiario', type: 'text', required: true },
     { id: 'estado', label: 'Estado', type: 'switch', defaultValue: true }
   ];
-  
-  // Actualizar la edad cuando cambia la fecha de nacimiento
+
   useEffect(() => {
     if (selectedCliente && selectedCliente.fechaNacimiento) {
       const edadCalculada = calcularEdad(selectedCliente.fechaNacimiento);
@@ -269,7 +265,7 @@ const Clientes = () => {
         onView={handleView}
         title="Gestión de Clientes"
       />
-      
+
       <DetailModal
         title={`Detalle del Cliente: ${selectedCliente?.nombre}`}
         data={selectedCliente}
