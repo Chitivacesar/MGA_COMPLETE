@@ -285,7 +285,7 @@ const VentaCursosForm = ({
 
     // Mostrar resultados después de un breve retraso para evitar demasiadas actualizaciones
     setTimeout(() => {
-      const searchTermLower = searchTerm.toLowerCase()
+      const searchTermLower = (searchTerm || '').toLowerCase()
       const matches = clientes.filter(
         (cliente) =>
           cliente.nombre.toLowerCase().includes(searchTermLower) ||
@@ -316,7 +316,7 @@ const VentaCursosForm = ({
 
     // Mostrar resultados después de un breve retraso para evitar demasiadas actualizaciones
     setTimeout(() => {
-      const searchTermLower = searchTerm.toLowerCase()
+      const searchTermLower = (searchTerm || '').toLowerCase()
       const matches = beneficiarios.filter(
         (beneficiario) =>
           beneficiario.nombre.toLowerCase().includes(searchTermLower) ||

@@ -25,7 +25,8 @@ const usuarioHasRolRoutes = require('./routes/usuarioHasRolRoutes');
 const ventaRoutes = require('./routes/ventaRoutes');
 const programacionClaseRoutes = require('./routes/programacionClaseRoutes');
 const programacionProfesorRoutes = require('./routes/programacionProfesorRoutes');
-
+const profesorHasCursoRoutes = require('./routes/profesorHasCursoRoutes');
+const contadorRoutes = require('./routes/contadorRoutes');
 
 const app = express();
 
@@ -52,25 +53,26 @@ app.use('/api/beneficiarios', beneficiarioRoutes);
 app.use('/api/clases', claseRoutes);
 app.use('/api/curso_has_numero_de_clases', cursoHasNumeroDeClasesRoutes);
 app.use('/api/cursos', cursoRoutes);
-app.use('/api/especialidades-profesores', especialidadProfesorRoutes);
+app.use('/api/especialidades_de_profesores', especialidadProfesorRoutes);
 app.use('/api/grupos', grupoRoutes);
 app.use('/api/matriculas', matriculaRoutes);
-app.use('/api/numero-de-clases', numeroDeClasesRoutes);
+app.use('/api/numero_de_clases', numeroDeClasesRoutes);
 app.use('/api/pagos', pagoRoutes);
 app.use('/api/permisos', permisoRoutes);
 app.use('/api/privilegios', privilegioRoutes);
 app.use('/api/profesores', profesorRoutes);
 app.use('/api/roles', rolRoutes); // Agregado punto y coma
 app.use('/api/usuarios', usuarioRoutes);
-app.use('/api/rol-permiso-privilegios', rolPermisoPrivilegioRoutes);
-app.use('/api/usuarios-has-rol', usuarioHasRolRoutes);
+app.use('/api/rol_permiso_privilegio', rolPermisoPrivilegioRoutes);
+app.use('/api/usuarios_has_rol', usuarioHasRolRoutes);
 app.use('/api/ventas', ventaRoutes);
 app.use('/api/programacion_de_clases', programacionClaseRoutes);
 app.use('/api/programacion_de_profesores', programacionProfesorRoutes);
-
+app.use('/api/profesor_has_curso', profesorHasCursoRoutes);
+app.use('/api/contador', contadorRoutes);
 
 // Start server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });

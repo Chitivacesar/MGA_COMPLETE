@@ -1,25 +1,26 @@
 const Venta = require('../models/Venta');
 
-// GET - Todas las ventas
+// GET - Obtener todas las ventas
 exports.getVentas = async (req, res) => {
   try {
     const ventas = await Venta.find()
+      .sort({ createdAt: -1 })
       .populate('beneficiarioId')
       .populate('matriculaId')
-      .populate('cursoId'); // Cambiado de curso_has_numero_de_clasesId a cursoId
+      .populate('cursoId');
     res.json(ventas);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// GET - Venta por ID
+// GET - Obtener una venta por ID
 exports.getVentaById = async (req, res) => {
   try {
     const venta = await Venta.findById(req.params.id)
       .populate('beneficiarioId')
       .populate('matriculaId')
-      .populate('curso_has_numero_de_clasesId');
+      .populate('cursoId');
     if (venta) {
       res.json(venta);
     } else {
@@ -30,10 +31,22 @@ exports.getVentaById = async (req, res) => {
   }
 };
 
-// POST - Crear nueva venta
+// POST - Crear una nueva venta
 exports.createVenta = async (req, res) => {
-  const venta = new Venta(req.body);
   try {
+    const venta = new Venta({
+      beneficiarioId: req.body.beneficiarioId,
+      matriculaId: req.body.matriculaId || null,
+      cursoId: req.body.cursoId || null,
+      numero_de_clases: req.body.numero_de_clases || null,
+      ciclo: req.body.ciclo || null,
+      tipo: req.body.tipo,
+      fechaInicio: req.body.fechaInicio,
+      fechaFin: req.body.fechaFin,
+      estado: req.body.estado,
+      valor_total: req.body.valor_total
+    });
+
     const nuevaVenta = await venta.save();
     res.status(201).json(nuevaVenta);
   } catch (error) {
@@ -41,32 +54,34 @@ exports.createVenta = async (req, res) => {
   }
 };
 
-// PUT - Actualizar venta
+// PUT - Actualizar una venta
 exports.updateVenta = async (req, res) => {
   try {
     const venta = await Venta.findById(req.params.id);
-    if (venta) {
-      Object.assign(venta, req.body);
-      const ventaActualizada = await venta.save();
-      res.json(ventaActualizada);
-    } else {
-      res.status(404).json({ message: 'Venta no encontrada' });
+    if (!venta) {
+      return res.status(404).json({ message: 'Venta no encontrada' });
     }
+
+    Object.assign(venta, req.body);
+    venta.updatedAt = new Date();
+
+    const ventaActualizada = await venta.save();
+    res.json(ventaActualizada);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
 };
 
-// DELETE - Eliminar venta
+// DELETE - Eliminar una venta
 exports.deleteVenta = async (req, res) => {
   try {
     const venta = await Venta.findById(req.params.id);
-    if (venta) {
-      await venta.deleteOne();
-      res.json({ message: 'Venta eliminada' });
-    } else {
-      res.status(404).json({ message: 'Venta no encontrada' });
+    if (!venta) {
+      return res.status(404).json({ message: 'Venta no encontrada' });
     }
+
+    await venta.deleteOne();
+    res.json({ message: 'Venta eliminada' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

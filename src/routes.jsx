@@ -5,6 +5,8 @@ import ProtectedRoute from './shared/components/ProtectedRoute';
 import PublicRoute from './shared/components/PublicRoute';
 import ForgotPassword from './features/auth/pages/ForgotPassword';
 import AccountSettings from './features/auth/Pages/AccountSettings';
+import { VentaCursosProvider } from './features/venta-servicios/context/VentaCursosContext';
+import { AlertVentasProvider } from './features/venta-servicios/context/AlertVentasContext';
 
 // Carga perezosa de componentes de ruta
 const Dashboard = lazy(() => import('./features/dashboard/pages/Dashboard'));
@@ -184,7 +186,11 @@ export const router = createBrowserRouter([
             path: 'venta-cursos',
             element: (
               <ProtectedRoute requiredPermissions={['venta-servicios-venta-cursos']}>
-                <VentaCursos />
+                <AlertVentasProvider>
+                  <VentaCursosProvider>
+                    <VentaCursos />
+                  </VentaCursosProvider>
+                </AlertVentasProvider>
               </ProtectedRoute>
             )
           },
