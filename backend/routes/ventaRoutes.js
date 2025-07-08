@@ -9,4 +9,7 @@ router.post('/', ventaController.createVenta);
 router.put('/:id', ventaController.updateVenta);
 router.delete('/:id', ventaController.deleteVenta);
 
+// Ruta para anular una venta con motivo
+router.patch('/:id/anular', ventaController.anularVenta);
+
 module.exports = router;

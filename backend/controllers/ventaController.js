@@ -86,3 +86,24 @@ exports.deleteVenta = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+// PATCH - Anular una venta con motivo
+exports.anularVenta = async (req, res) => {
+  try {
+    const venta = await Venta.findById(req.params.id);
+    if (!venta) {
+      return res.status(404).json({ message: 'Venta no encontrada' });
+    }
+    if (!req.body.motivoAnulacion) {
+      return res.status(400).json({ message: 'Debe proporcionar un motivo de anulación' });
+    }
+    venta.estado = 'anulada';
+    venta.motivoAnulacion = req.body.motivoAnulacion;
+    venta.updatedAt = new Date();
+    await venta.save();
+    res.json({ message: 'Venta anulada correctamente' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

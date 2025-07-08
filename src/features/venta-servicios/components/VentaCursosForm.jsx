@@ -76,8 +76,8 @@ const VentaCursosForm = ({
     id: null,
     nombre: "",
     apellido: "",
-    tipoDocumento: "TI",
-    numeroDocumento: "",
+    tipo_de_documento: "TI",
+    numero_de_documento: "",
     fechaNacimiento: "",
     age: "",
     direccion: "",
@@ -115,6 +115,11 @@ const VentaCursosForm = ({
   const [showClienteResults, setShowClienteResults] = useState(false)
   const [showBeneficiarioResults, setShowBeneficiarioResults] = useState(false)
   const [showCursoResults, setShowCursoResults] = useState(false)
+
+  // Estado para anulación
+  const [anularDialogOpen, setAnularDialogOpen] = useState(false)
+  const [motivoAnulacion, setMotivoAnulacion] = useState("")
+  const [anulando, setAnulando] = useState(false)
 
   const tiposDocumento = [
     { value: "CC", label: "Cédula de Ciudadanía (CC)" },
@@ -321,7 +326,7 @@ const VentaCursosForm = ({
         (beneficiario) =>
           beneficiario.nombre.toLowerCase().includes(searchTermLower) ||
           beneficiario.apellido.toLowerCase().includes(searchTermLower) ||
-          beneficiario.numeroDocumento.includes(searchTerm),
+          (beneficiario.numero_de_documento && beneficiario.numero_de_documento.includes(searchTerm)),
       )
 
       setFilteredBeneficiarios(matches)
@@ -385,7 +390,7 @@ const VentaCursosForm = ({
 
   // Crear beneficiario nuevo
   const createNewBeneficiario = () => {
-    if (!beneficiarioData.nombre || !beneficiarioData.apellido || !beneficiarioData.numeroDocumento) {
+    if (!beneficiarioData.nombre || !beneficiarioData.apellido || !beneficiarioData.numero_de_documento) {
       setAlertMessage({
         show: true,
         message: "Complete los campos requeridos para crear el beneficiario",
@@ -513,6 +518,35 @@ const VentaCursosForm = ({
   useEffect(() => {
     setFilteredCursos(cursosDisponibles)
   }, [cursosDisponibles])
+
+  // Función para anular venta
+  const handleConfirmAnular = async () => {
+    if (!motivoAnulacion.trim()) {
+      setAlertMessage({ show: true, message: "Debe ingresar el motivo de anulación", severity: "error" })
+      return
+    }
+    setAnulando(true)
+    try {
+      // Ahora usamos el endpoint PATCH /api/ventas/:id/anular
+      const response = await fetch(`/api/ventas/${initialData?.id}/anular`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ motivoAnulacion }),
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || "Error al anular la venta")
+      }
+      setAlertMessage({ show: true, message: "Venta anulada correctamente", severity: "success" })
+      setAnularDialogOpen(false)
+      setMotivoAnulacion("")
+      if (onClose) onClose()
+    } catch (error) {
+      setAlertMessage({ show: true, message: error.message, severity: "error" })
+    } finally {
+      setAnulando(false)
+    }
+  }
 
   // Renderizado del contenido del paso actual
   const renderStepContent = () => {
@@ -784,7 +818,7 @@ const VentaCursosForm = ({
                   </ListItemAvatar>
                   <ListItemText
                     primary={`${beneficiario.nombre} ${beneficiario.apellido}`}
-                    secondary={`${beneficiario.tipoDocumento}: ${beneficiario.numeroDocumento}`}
+                    secondary={`${beneficiario.tipo_de_documento}: ${beneficiario.numero_de_documento}`}
                   />
                 </ListItem>
                     ))}
@@ -842,8 +876,8 @@ const VentaCursosForm = ({
                 <FormControl fullWidth margin="normal">
                   <InputLabel>Tipo Documento</InputLabel>
                   <Select
-                    value={beneficiarioData.tipoDocumento}
-                    onChange={(e) => setBeneficiarioData({ ...beneficiarioData, tipoDocumento: e.target.value })}
+                  value={beneficiarioData.tipo_de_documento}
+                  onChange={(e) => setBeneficiarioData({ ...beneficiarioData, tipo_de_documento: e.target.value })}
                     label="Tipo Documento"
                   >
                     {tiposDocumento.map((tipo) => (
@@ -859,8 +893,8 @@ const VentaCursosForm = ({
                   fullWidth
                   required
                   label="Número de Documento"
-                  value={beneficiarioData.numeroDocumento}
-                  onChange={(e) => setBeneficiarioData({ ...beneficiarioData, numeroDocumento: e.target.value })}
+                  value={beneficiarioData.numero_de_documento}
+                  onChange={(e) => setBeneficiarioData({ ...beneficiarioData, numero_de_documento: e.target.value })}
                   margin="normal"
                 />
               </Grid>
@@ -1162,6 +1196,17 @@ const VentaCursosForm = ({
         <Button onClick={onClose} variant="outlined">
           Cancelar
         </Button>
+        {/* Botón para anular venta solo en edición */}
+        {isEditing && (
+          <Button
+            color="error"
+            variant="outlined"
+            onClick={() => setAnularDialogOpen(true)}
+            disabled={anulando}
+          >
+            Anular venta
+          </Button>
+        )}
 
         {activeStep > 0 && (
           <Button
@@ -1183,6 +1228,29 @@ const VentaCursosForm = ({
           </Button>
         )}
       </DialogActions>
+
+      {/* Diálogo de anulación */}
+      <Dialog open={anularDialogOpen} onClose={() => setAnularDialogOpen(false)}>
+        <DialogTitle>Anular venta</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Motivo de anulación"
+            type="text"
+            fullWidth
+            value={motivoAnulacion}
+            onChange={e => setMotivoAnulacion(e.target.value)}
+            disabled={anulando}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAnularDialogOpen(false)} disabled={anulando}>Cancelar</Button>
+          <Button onClick={handleConfirmAnular} color="error" disabled={anulando || !motivoAnulacion.trim()}>
+            {anulando ? "Anulando..." : "Confirmar anulación"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <style jsx global>{`
         @keyframes slide-left {

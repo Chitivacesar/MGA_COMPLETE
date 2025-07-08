@@ -339,7 +339,7 @@ const Profesores = () => {
           const profesorRol = rolesResponse.data.find(rol => rol.nombre.toLowerCase() === 'profesor');
           if (profesorRol) {
             await axios.post(
-              'http://localhost:3000/api/usuarios-has-rol', // corregido a guiones
+              'http://localhost:3000/api/usuarios_has_rol', // corregido a guiones
               {
                 usuarioId: formData.usuarioId,
                 rolId: profesorRol._id

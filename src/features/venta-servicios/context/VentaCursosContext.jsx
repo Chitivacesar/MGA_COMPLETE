@@ -56,6 +56,17 @@ export const VentaCursosProvider = ({ children }) => {
   };
 
   const formatVentaParaTabla = (venta) => {
+    let estado = venta.estado?.toLowerCase();
+    // Mapear los estados correctamente
+    if (estado === 'anulada') {
+      estado = 'anulada';
+    } else if (estado === 'vencida') {
+      estado = 'vencida';
+    } else if (estado === 'vigente') {
+      estado = 'vigente';
+    } else {
+      estado = 'vigente'; // fallback
+    }
     return {
       id: venta.codigoVenta,
       beneficiario: venta.beneficiarioId ? `${venta.beneficiarioId.nombre} ${venta.beneficiarioId.apellido}` : 'No especificado',
@@ -64,7 +75,7 @@ export const VentaCursosProvider = ({ children }) => {
       ciclo: venta.ciclo,
       clases: venta.numero_de_clases,
       valorTotal: venta.valor_total,
-      estado: venta.estado,
+      estado,
       motivoAnulacion: venta.motivoAnulacion
     };
   };
@@ -76,14 +87,13 @@ export const VentaCursosProvider = ({ children }) => {
   const anularVenta = async (ventaId, motivoAnulacion) => {
     try {
       setLoading(true);
-      await axios.put(`http://localhost:3000/api/ventas/${ventaId}`, {
-        estado: 'anulada',
+      await axios.patch(`http://localhost:3000/api/ventas/${ventaId}/anular`, {
         motivoAnulacion
       });
       await fetchVentas();
       return true;
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.message || err.message);
       return false;
     } finally {
       setLoading(false);

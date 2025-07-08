@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 // Import models
 const Asistencia = require('./Asistencia');
+const Cliente = require('./Cliente');
 const Aula = require('./Aula');
 const Beneficiario = require('./Beneficiario');
 const Clase = require('./Clase');
@@ -30,6 +31,7 @@ module.exports = {
   Aula,
   Beneficiario,
   Clase,
+  Cliente,
   Curso,
   CursoHasNumeroDeClases,
   EspecialidadProfesor,

@@ -3,20 +3,22 @@ const Pago = require('../models/Pago');
 const pagoController = {
   async getPagos(req, res) {
     try {
+      // REVERTIR: Populate simple como antes
       const pagos = await Pago.find()
         .populate({
           path: 'ventas',
-          select: '_id valor_total estado beneficiarioId',
           populate: {
             path: 'beneficiarioId',
-            select: 'nombre apellido numero_de_documento telefono'
+            model: 'Beneficiario'
           }
         })
         .sort({ createdAt: -1 });
-  
+
+      // REVERTIR: Formateo simple como antes
       const pagosFormateados = pagos.map(pago => {
         const pagoObj = pago.toObject();
-        
+        const venta = pagoObj.ventas;
+        const beneficiario = venta?.beneficiarioId;
         return {
           _id: pagoObj._id,
           fechaPago: pagoObj.fechaPago,
@@ -24,25 +26,16 @@ const pagoController = {
           estado: pagoObj.estado,
           createdAt: pagoObj.createdAt,
           updatedAt: pagoObj.updatedAt,
-          ventas: pagoObj.ventas ? {
-            _id: pagoObj.ventas._id,
-            valor_total: pagoObj.ventas.valor_total || 0,
-            estado: pagoObj.ventas.estado,
-            beneficiario: pagoObj.ventas.beneficiarioId ? {
-              _id: pagoObj.ventas.beneficiarioId._id,
-              nombre: pagoObj.ventas.beneficiarioId.nombre,
-              apellido: pagoObj.ventas.beneficiarioId.apellido,
-              numero_de_documento: pagoObj.ventas.beneficiarioId.numero_de_documento,
-              telefono: pagoObj.ventas.beneficiarioId.telefono
-            } : null
+          ventas: venta ? {
+            ...venta,
+            beneficiario: beneficiario ? { ...beneficiario } : null
           } : null,
           valor_total: pagoObj.valor_total || 0,
           valorTotal: pagoObj.valor_total || 0,
-          porcentajePagado: pagoObj.ventas?.valor_total ? 
-            Math.round((pagoObj.valor_total / pagoObj.ventas.valor_total) * 100) : 0
+          porcentajePagado: venta?.valor_total ? Math.round((pagoObj.valor_total / venta.valor_total) * 100) : 0
         };
       });
-      
+
       res.json({
         success: true,
         data: pagosFormateados,
@@ -131,10 +124,13 @@ const pagoController = {
       
       const pago = await Pago.findById(id)
         .populate({
-          path: 'venta',
+          path: 'ventas',
           populate: {
             path: 'beneficiarioId',
-            model: 'Beneficiario'
+            populate: {
+              path: 'clienteId',
+              model: 'Cliente'
+            }
           }
         });
 
@@ -147,31 +143,19 @@ const pagoController = {
 
       // Formatear el pago individual - CORREGIDO
       const pagoObj = pago.toObject();
-      const beneficiario = pagoObj.venta?.beneficiarioId;
-      
-      const beneficiarioData = beneficiario ? {
-        _id: beneficiario._id,
-        nombre: beneficiario.nombre || '',
-        apellido: beneficiario.apellido || '',
-        email: beneficiario.email || '', // Puede no existir
-        telefono: beneficiario.telefono || '',
-        // CORREGIDO: Usar el campo correcto
-        documento: beneficiario.numero_de_documento || '',
-        numero_de_documento: beneficiario.numero_de_documento || '',
-        tipo_de_documento: beneficiario.tipo_de_documento || '',
-        direccion: beneficiario.direccion || '',
-        fechaDeNacimiento: beneficiario.fechaDeNacimiento || null
-      } : null;
-      
+      const venta = pagoObj.ventas;
+      const beneficiario = venta?.beneficiarioId;
+      const cliente = beneficiario?.clienteId;
       const pagoFormateado = {
         ...pagoObj,
         valorTotal: pagoObj.valor_total,
         valor_total: pagoObj.valor_total,
-        venta: pagoObj.venta ? {
-          ...pagoObj.venta,
-          valorTotal: pagoObj.venta.valor_total,
-          valor_total: pagoObj.venta.valor_total,
-          beneficiario: beneficiarioData
+        ventas: venta ? {
+          ...venta,
+          beneficiario: beneficiario ? {
+            ...beneficiario,
+            cliente: cliente ? { ...cliente } : null
+          } : null
         } : null
       };
 
@@ -199,41 +183,39 @@ const pagoController = {
       // AGREGADO: Validar que la venta existe
       const Venta = require('../models/Venta');
       let venta;
-      
       // Buscar venta por código o por ID
-      if (mongoose.Types.ObjectId.isValid(req.body.venta)) {
-        venta = await Venta.findById(req.body.venta);
+      if (mongoose.Types.ObjectId.isValid(req.body.ventas)) {
+        venta = await Venta.findById(req.body.ventas);
       } else {
         // Buscar por código de venta
-        venta = await Venta.findOne({ codigoVenta: req.body.venta });
+        venta = await Venta.findOne({ codigoVenta: req.body.ventas });
       }
-      
       if (!venta) {
         return res.status(400).json({
           success: false,
           message: 'Venta no encontrada. Verifica el código de venta.'
         });
       }
-      
       // Crear el pago con el ID de la venta
       const pagoData = {
         ...req.body,
-        venta: venta._id // Asegurar que se use el ObjectId
+        ventas: venta._id // Asegurar que se use el ObjectId
       };
-      
       const nuevoPago = new Pago(pagoData);
       const pagoGuardado = await nuevoPago.save();
       
-      // Obtener el pago completo con populate
+      // Obtener el pago completo con populate profundo
       const pagoCompleto = await Pago.findById(pagoGuardado._id)
         .populate({
-          path: 'venta',
+          path: 'ventas',
           populate: {
             path: 'beneficiarioId',
-            model: 'Beneficiario'
+            populate: {
+              path: 'clienteId',
+              model: 'Cliente'
+            }
           }
         });
-
       res.status(201).json({
         success: true,
         data: pagoCompleto,
@@ -260,10 +242,13 @@ const pagoController = {
         req.body,
         { new: true, runValidators: true }
       ).populate({
-        path: 'venta',
+        path: 'ventas',
         populate: {
           path: 'beneficiarioId',
-          model: 'Beneficiario'
+          populate: {
+            path: 'clienteId',
+            model: 'Cliente'
+          }
         }
       });
 

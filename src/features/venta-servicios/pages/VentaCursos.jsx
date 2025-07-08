@@ -236,14 +236,18 @@ const VentaCursos = () => {
   const ventasFormateadas = ventas.map(formatVentaParaTabla);
   console.log('Ventas formateadas para la tabla:', ventasFormateadas);
 
+  // Filtrar solo las ventas cuyo ID empieza por "CU"
+  const ventasCursosCU = ventasFormateadas.filter(v => v.id && v.id.startsWith('CU'));
+
   return (
     <>
       <GenericList
-        data={ventasFormateadas}
+        data={ventasCursosCU}
         columns={columns}
         onView={handleView}
         onDelete={handleDelete}
         onCreate={handleCreate}
+        onCancel={handleAnular}
         title="Venta de Cursos"
         showViewAction
         showDeleteAction

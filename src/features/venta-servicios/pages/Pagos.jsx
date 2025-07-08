@@ -73,28 +73,70 @@ const getFormFields = () => [
   }
 ];
 
-// Función auxiliar CORREGIDA para obtener información del beneficiario
+// Función auxiliar para obtener información del beneficiario (solo ventas.beneficiario, ya que backend unifica)
 const getBeneficiarioInfo = (payment) => {
-  console.log('=== getBeneficiarioInfo ===');
-  console.log('Payment structure:', JSON.stringify(payment, null, 2));
-  
   let beneficiario = null;
-  
-  // Actualizado para usar el campo correcto de la respuesta
-  if (payment.ventas?.beneficiario && typeof payment.ventas.beneficiario === 'object') {
-    const bene = payment.ventas.beneficiario;
+  const bene = payment.ventas?.beneficiario;
+  if (bene && typeof bene === 'object') {
     beneficiario = {
       nombre: bene.nombre || '',
       apellido: bene.apellido || '',
-      documento: bene.numero_de_documento || 'No disponible',
-      telefono: bene.telefono || 'No disponible'
+      documento: bene.numero_de_documento || bene.numeroDocumento || 'No disponible',
+      telefono: bene.telefono || 'No disponible',
+      email: bene.email || bene.correo || '',
+      tipo_de_documento: bene.tipoDocumento || bene.tipo_de_documento || '',
+      direccion: bene.direccion || '',
+      fechaDeNacimiento: bene.fechaNacimiento || bene.fecha_de_nacimiento || ''
     };
-    console.log('Found beneficiario:', beneficiario);
-  } else {
-    console.log('No se encontró información del beneficiario en:', payment);
   }
-  
   return beneficiario;
+};
+
+// Función auxiliar para obtener información del cliente (soporta clienteId como string o como objeto)
+const getClienteInfo = (payment) => {
+  let cliente = null;
+  const bene = payment.ventas?.beneficiario;
+  if (bene) {
+    if (bene.clienteId && typeof bene.clienteId === 'object') {
+      // Si clienteId es objeto poblado (caso populate profundo)
+      const cli = bene.clienteId;
+      cliente = {
+        nombre: cli.nombre || '',
+        apellido: cli.apellido || '',
+        documento: cli.numero_de_documento || cli.numeroDocumento || 'No disponible',
+        telefono: cli.telefono || 'No disponible',
+        email: cli.email || cli.correo || '',
+        tipo_de_documento: cli.tipoDocumento || cli.tipo_de_documento || '',
+        direccion: cli.direccion || '',
+        fechaDeNacimiento: cli.fechaNacimiento || cli.fecha_de_nacimiento || ''
+      };
+    } else if (bene.nombre || bene.apellido) {
+      // Si el beneficiario tiene nombre y apellido, mostrarlo como cliente (caso clienteId == _id)
+      cliente = {
+        nombre: bene.nombre || '',
+        apellido: bene.apellido || '',
+        documento: bene.numero_de_documento || bene.numeroDocumento || 'No disponible',
+        telefono: bene.telefono || 'No disponible',
+        email: bene.email || bene.correo || '',
+        tipo_de_documento: bene.tipoDocumento || bene.tipo_de_documento || '',
+        direccion: bene.direccion || '',
+        fechaDeNacimiento: bene.fechaNacimiento || bene.fecha_de_nacimiento || ''
+      };
+    } else {
+      // Si no hay datos, mostrar "Sin nombre"
+      cliente = {
+        nombre: 'Sin nombre',
+        apellido: '',
+        documento: bene?.clienteId || '',
+        telefono: '',
+        email: '',
+        tipo_de_documento: '',
+        direccion: '',
+        fechaDeNacimiento: ''
+      };
+    }
+  }
+  return cliente;
 };
 
 // Función para formatear nombre completo
@@ -136,23 +178,31 @@ const Pagos = () => {
     setSelectedPayment(null);
   };
 
-  // Columnas actualizadas con la función corregida
+  // Columnas actualizadas para mostrar Beneficiario y Cliente
   const columns = [
-    { 
-      id: 'beneficiario', 
+    {
+      id: 'beneficiario',
       label: 'Beneficiario',
       render: (value, row) => {
         const beneficiario = getBeneficiarioInfo(row);
         return formatearNombreCompleto(beneficiario);
       }
     },
-    { 
-      id: 'valor_total', 
-      label: 'Valor Total', 
-      render: (value, row) => `$${(row.ventas?.valor_total || 0).toLocaleString('es-CO')}` 
+    {
+      id: 'cliente',
+      label: 'Cliente',
+      render: (value, row) => {
+        const cliente = getClienteInfo(row);
+        return formatearNombreCompleto(cliente);
+      }
     },
-    { 
-      id: 'fechaPago', 
+    {
+      id: 'valor_total',
+      label: 'Valor Total',
+      render: (value, row) => `$${(row.ventas?.valor_total || 0).toLocaleString('es-CO')}`
+    },
+    {
+      id: 'fechaPago',
       label: 'Fecha Pago',
       render: (value) => {
         if (!value) return 'No disponible';
@@ -161,8 +211,8 @@ const Pagos = () => {
       }
     },
     { id: 'metodoPago', label: 'Método' },
-    { 
-      id: 'estado', 
+    {
+      id: 'estado',
       label: 'Estado',
       render: (value) => {
         const estados = {

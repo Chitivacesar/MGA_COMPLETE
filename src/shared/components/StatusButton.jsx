@@ -41,9 +41,12 @@ const statusConfig = {
   activo: { icon: <CheckCircle />, label: "Activo", color: "success" }, // First definition
   por_terminar: { icon: <Pending />, label: "Por Terminar", color: "warning" },
   vencida: { icon: <Stop />, label: "Vencida", color: "default" },
+  anulada: { icon: <Cancel />, label: "Anulada", color: "error" },
+
   // Estados de cursos
   pagado: { icon: <CheckCircle />, label: "Pagado", color: "success" },
   no_pagado: { icon: <Cancel />, label: "No Pagado", color: "error" },
+  vigente: { icon: <CheckCircle />, label: "Vigente", color: "success" },
 }
 
 export const StatusButton = ({ status, onAction, actionLabel, active }) => {

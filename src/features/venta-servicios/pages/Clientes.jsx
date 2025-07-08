@@ -21,12 +21,13 @@ const Clientes = () => {
       const beneficiariosResponse = await axios.get('http://localhost:3000/api/beneficiarios');
       const beneficiarios = beneficiariosResponse.data;
 
-      const usuariosHasRolResponse = await axios.get('http://localhost:3000/api/usuarios-has-rol');
+      const usuariosHasRolResponse = await axios.get('http://localhost:3000/api/usuarios_has_rol');
       const usuariosHasRol = usuariosHasRolResponse.data;
 
+      // Filtrar solo los beneficiarios donde clienteId === _id (mismo id)
       const clientesFiltrados = beneficiarios.filter(
         beneficiario =>
-          beneficiario.clienteId === beneficiario._id || beneficiario.clienteId === 'cliente'
+          beneficiario.clienteId && beneficiario._id && String(beneficiario.clienteId) === String(beneficiario._id)
       );
 
       const clientesFormateados = clientesFiltrados.map(cliente => {
