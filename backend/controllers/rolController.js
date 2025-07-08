@@ -1,4 +1,5 @@
 const Rol = require('../models/rol');
+const RolPermisoPrivilegio = require('../models/RolPermisoPrivilegio');
 
 // Función auxiliar para manejar errores de validación de Mongoose
 const handleValidationError = (error) => {
@@ -31,6 +32,19 @@ exports.getRoles = async (req, res) => {
     const roles = await Rol.find()
       .populate('permisos')
       .populate('privilegios')
+      .populate({
+        path: 'rol_permiso_privilegio',
+        populate: [
+          { 
+            path: 'permisoId',
+            select: 'nombre permiso descripcion'
+          },
+          { 
+            path: 'privilegioId',
+            select: 'nombre nombre_privilegio descripcion'
+          }
+        ]
+      })
       .sort({ nombre: 1 });
 
     res.json(roles);
@@ -45,13 +59,26 @@ exports.getRolById = async (req, res) => {
   try {
     const rol = await Rol.findById(req.params.id)
       .populate('permisos')
-      .populate('privilegios');
+      .populate('privilegios')
+      .populate({
+        path: 'rol_permiso_privilegio',
+        populate: [
+          { 
+            path: 'permisoId',
+            select: 'nombre permiso descripcion'
+          },
+          { 
+            path: 'privilegioId',
+            select: 'nombre nombre_privilegio descripcion'
+          }
+        ]
+      });
 
-    if (rol) {
-      res.json(rol);
-    } else {
-      res.status(404).json({ message: 'Rol no encontrado' });
+    if (!rol) {
+      return res.status(404).json({ message: 'Rol no encontrado' });
     }
+
+    res.json(rol);
   } catch (error) {
     console.error('Error al obtener rol:', error);
     res.status(400).json({ message: 'ID de rol inválido' });
@@ -63,6 +90,7 @@ exports.createRol = async (req, res) => {
   try {
     const { nombre, descripcion, estado, permisos, privilegios } = req.body;
 
+    // Validaciones básicas
     if (!nombre || !descripcion) {
       return res.status(400).json({
         message: 'Faltan campos requeridos',
@@ -70,6 +98,7 @@ exports.createRol = async (req, res) => {
       });
     }
 
+    // Verificar duplicados
     const rolExistente = await Rol.findOne({ 
       nombre: { $regex: new RegExp(`^${nombre.trim()}$`, 'i') } 
     });
@@ -81,6 +110,7 @@ exports.createRol = async (req, res) => {
       });
     }
 
+    // Crear el rol
     const rol = new Rol({
       nombre: nombre.trim(),
       descripcion: descripcion.trim(),
@@ -91,9 +121,32 @@ exports.createRol = async (req, res) => {
 
     const nuevoRol = await rol.save();
 
+    // Crear las relaciones rol-permiso-privilegio
+    if (Array.isArray(permisos) && Array.isArray(privilegios)) {
+      const relaciones = [];
+      for (const permisoId of permisos) {
+        for (const privilegioId of privilegios) {
+          relaciones.push({
+            rolId: nuevoRol._id,
+            permisoId,
+            privilegioId
+          });
+        }
+      }
+      await RolPermisoPrivilegio.insertMany(relaciones);
+    }
+
+    // Obtener el rol completo con sus relaciones
     const rolCompleto = await Rol.findById(nuevoRol._id)
       .populate('permisos')
-      .populate('privilegios');
+      .populate('privilegios')
+      .populate({
+        path: 'rol_permiso_privilegio',
+        populate: [
+          { path: 'permisoId' },
+          { path: 'privilegioId' }
+        ]
+      });
 
     res.status(201).json(rolCompleto);
   } catch (error) {
@@ -113,6 +166,7 @@ exports.updateRol = async (req, res) => {
       return res.status(404).json({ message: 'Rol no encontrado' });
     }
 
+    // Verificar nombre duplicado
     if (nombre && nombre.trim().toLowerCase() !== rol.nombre.toLowerCase()) {
       const rolExistente = await Rol.findOne({
         nombre: { $regex: new RegExp(`^${nombre.trim()}$`, 'i') },
@@ -127,23 +181,48 @@ exports.updateRol = async (req, res) => {
       }
     }
 
+    // Actualizar campos básicos
     if (nombre) rol.nombre = nombre.trim();
     if (descripcion) rol.descripcion = descripcion.trim();
     if (typeof estado === 'boolean') rol.estado = estado;
 
-    if (Array.isArray(permisos)) {
-      rol.permisos = permisos;
-    }
+    // Actualizar permisos y privilegios
+    if (Array.isArray(permisos)) rol.permisos = permisos;
+    if (Array.isArray(privilegios)) rol.privilegios = privilegios;
 
-    if (Array.isArray(privilegios)) {
-      rol.privilegios = privilegios;
-    }
-
+    // Guardar cambios en el rol
     const rolActualizado = await rol.save();
 
+    // Actualizar relaciones rol-permiso-privilegio
+    if (Array.isArray(permisos) && Array.isArray(privilegios)) {
+      // Eliminar relaciones existentes
+      await RolPermisoPrivilegio.deleteMany({ rolId: rol._id });
+
+      // Crear nuevas relaciones
+      const relaciones = [];
+      for (const permisoId of permisos) {
+        for (const privilegioId of privilegios) {
+          relaciones.push({
+            rolId: rol._id,
+            permisoId,
+            privilegioId
+          });
+        }
+      }
+      await RolPermisoPrivilegio.insertMany(relaciones);
+    }
+
+    // Obtener rol actualizado con todas sus relaciones
     const rolCompleto = await Rol.findById(rolActualizado._id)
       .populate('permisos')
-      .populate('privilegios');
+      .populate('privilegios')
+      .populate({
+        path: 'rol_permiso_privilegio',
+        populate: [
+          { path: 'permisoId' },
+          { path: 'privilegioId' }
+        ]
+      });
 
     res.json(rolCompleto);
   } catch (error) {
@@ -161,6 +240,10 @@ exports.deleteRol = async (req, res) => {
       return res.status(404).json({ message: 'Rol no encontrado' });
     }
 
+    // Eliminar relaciones rol-permiso-privilegio
+    await RolPermisoPrivilegio.deleteMany({ rolId: rol._id });
+
+    // Eliminar el rol
     await rol.deleteOne();
     res.json({ message: 'Rol eliminado correctamente' });
   } catch (error) {

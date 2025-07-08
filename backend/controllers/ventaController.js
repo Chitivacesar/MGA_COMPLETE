@@ -6,7 +6,7 @@ exports.getVentas = async (req, res) => {
     const ventas = await Venta.find()
       .populate('beneficiarioId')
       .populate('matriculaId')
-      .populate('curso_has_numero_de_clasesId');
+      .populate('cursoId'); // Cambiado de curso_has_numero_de_clasesId a cursoId
     res.json(ventas);
   } catch (error) {
     res.status(500).json({ message: error.message });

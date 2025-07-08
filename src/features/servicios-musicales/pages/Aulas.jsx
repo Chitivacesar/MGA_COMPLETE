@@ -7,6 +7,16 @@ import { FormModal } from '../../../shared/components/formModal2';
 import { SuccessAlert } from '../../../shared/components/SuccessAlert';
 
 const Aulas = () => {
+  const [aulas, setAulas] = useState([]);
+  const [selectedAula, setSelectedAula] = useState(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [formModalOpen, setFormModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [alert, setAlert] = useState({
+    open: false,
+    message: ''
+  });
+
   const columns = [
     { id: 'numeroAula', label: 'Número de Aula' },
     { id: 'capacidad', label: 'Capacidad' },
@@ -18,19 +28,19 @@ const Aulas = () => {
           active={value === 'Activo'} 
           onClick={() => handleToggleStatus(row._id)}
         />
-      )
+      ),
+      // Configuración del filtro para esta columna CORREGIDA
+      filter: {
+        type: 'select',
+        options: [
+          { value: 'Todos', label: 'Todos' },
+          { value: 'Activo', label: 'Activos' },
+          { value: 'Inactivo', label: 'Inactivos' }
+        ],
+        defaultValue: 'Todos'
+      }
     }
   ];
-
-  const [aulas, setAulas] = useState([]);
-  const [selectedAula, setSelectedAula] = useState(null);
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [formModalOpen, setFormModalOpen] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [alert, setAlert] = useState({
-    open: false,
-    message: ''
-  });
 
   const detailFields = [
     { id: 'numeroAula', label: 'Número de Aula' },
@@ -112,7 +122,7 @@ const Aulas = () => {
         message: 'Error al actualizar el estado'
       });
     }
-};
+  };
 
   const handleDelete = async (aula) => {
     const confirmDelete = window.confirm(`¿Está seguro de eliminar el aula ${aula.numeroAula}?`);
@@ -201,38 +211,17 @@ const Aulas = () => {
     });
   };
 
-  // Agregar este estado después de las otras declaraciones de estado
-  const [filtroEstado, setFiltroEstado] = useState('todos');
-
-  // Agregar esta función para filtrar las aulas
-  const aulasFiltradas = aulas.filter(aula => {
-    if (filtroEstado === 'todos') return true;
-    return aula.estado === filtroEstado;
-  });
-
-  // Modificar el return para agregar el filtro y usar aulasFiltradas
   return (
     <>
-      <div style={{ marginBottom: '1rem' }}>
-        <select 
-          value={filtroEstado} 
-          onChange={(e) => setFiltroEstado(e.target.value)}
-          style={{ padding: '0.5rem' }}
-        >
-          <option value="todos">Todos</option>
-          <option value="Activo">Activos</option>
-          <option value="Inactivo">Inactivos</option>
-        </select>
-      </div>
-
       <GenericList2
-        data={aulasFiltradas}
+        data={aulas}
         columns={columns}
         onEdit={handleEdit}
         onDelete={handleDelete}
         onCreate={handleCreate}
         onView={handleView}
         title="Gestión de Aulas"
+        enableFilters={true}
       />
       
       <DetailModal
@@ -262,5 +251,3 @@ const Aulas = () => {
 };
 
 export default Aulas;
-
-

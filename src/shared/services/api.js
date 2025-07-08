@@ -12,7 +12,7 @@ const api = axios.create({
 
 // Mejorar el interceptor para manejar errores
 api.interceptors.response.use(
-  response => response.data, // Ya retorna response.data
+  response => response.data,
   error => {
     console.error('Error en la llamada API:', {
       url: error.config?.url,
@@ -20,15 +20,20 @@ api.interceptors.response.use(
       status: error.response?.status,
       data: error.response?.data
     });
-    throw error;
+    throw error.response?.data || error;
   }
 );
 
 // Servicios para usuarios
 export const usuariosService = {
   getAll: async () => {
-    return await api.get(API_CONFIG.ENDPOINTS.USUARIOS);
-    return response.data; // Esto causa undefined porque response ya es data
+    try {
+      const response = await api.get(API_CONFIG.ENDPOINTS.USUARIOS);
+      return response; // El interceptor ya transformó esto a response.data
+    } catch (error) {
+      console.error('Error en getAll usuarios:', error);
+      throw error;
+    }
   },
 
   getById: async (id) => {

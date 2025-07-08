@@ -15,10 +15,22 @@ const Roles = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [permisos, setPermisos] = useState([]); // Los módulos disponibles
   const [privilegios, setPrivilegios] = useState([]); // Las acciones disponibles
+  const [rolPermisoPrivilegio, setRolPermisoPrivilegio] = useState([]); // Relaciones completas
   const [alert, setAlert] = useState({
     open: false,
     message: ''
   });
+
+  // Función para obtener las relaciones rol-permiso-privilegio
+  const fetchRolPermisoPrivilegio = async () => {
+    try {
+      const response = await axios.get('http://localhost:3000/api/rol-permiso-privilegios?populate=rolId,permisoId,privilegioId');
+      console.log('Relaciones rol-permiso-privilegio cargadas:', response.data);
+      setRolPermisoPrivilegio(response.data);
+    } catch (error) {
+      console.error('Error al cargar relaciones rol-permiso-privilegio:', error);
+    }
+  };
 
   // Función para transformar permisos del formulario a IDs de permisos y privilegios
   const transformPermisosToIds = (permisosFormulario, permisosDisponibles, privilegiosDisponibles) => {
@@ -96,6 +108,37 @@ const Roles = () => {
     };
   };
 
+  // Función para obtener permisos y privilegios de un rol específico usando las relaciones
+  const getPermisosPrivilegiosDelRol = (rolId) => {
+    // Filtrar relaciones por rol
+    const relacionesDelRol = rolPermisoPrivilegio.filter(relacion => 
+      relacion.rolId?._id === rolId || relacion.rolId === rolId
+    );
+
+    // Agrupar privilegios por permiso
+    const permisosConPrivilegios = {};
+    
+    relacionesDelRol.forEach(relacion => {
+      const permisoId = relacion.permisoId?._id || relacion.permisoId;
+      const privilegio = relacion.privilegioId;
+      
+      if (!permisosConPrivilegios[permisoId]) {
+        // Buscar el permiso completo en la lista de permisos
+        const permisoCompleto = permisos.find(p => p._id === permisoId);
+        permisosConPrivilegios[permisoId] = {
+          permiso: permisoCompleto,
+          privilegios: []
+        };
+      }
+      
+      if (privilegio) {
+        permisosConPrivilegios[permisoId].privilegios.push(privilegio);
+      }
+    });
+
+    return Object.values(permisosConPrivilegios);
+  };
+
   // Función para obtener los roles
   const fetchRoles = async () => {
     try {
@@ -137,6 +180,7 @@ const Roles = () => {
     fetchRoles();
     fetchPermisos();
     fetchPrivilegios();
+    fetchRolPermisoPrivilegio();
   }, []);
 
   // Función para cambiar el estado
@@ -344,6 +388,7 @@ const Roles = () => {
       
       // Actualizar la lista y cerrar modal
       await fetchRoles();
+      await fetchRolPermisoPrivilegio(); // Actualizar también las relaciones
       handleCloseForm();
 
     } catch (error) {
@@ -445,30 +490,46 @@ const Roles = () => {
     { id: 'descripcion', label: 'Descripción' },
     { id: 'estado', label: 'Estado', render: (value) => <StatusButton active={value === true} /> },
     { 
-      id: 'permisos', 
-      label: 'Permisos',
-      render: (permisos) => {
-        if (!Array.isArray(permisos) || permisos.length === 0) return 'No hay permisos asignados';
+      id: 'permisos_privilegios', 
+      label: 'Permisos y Privilegios',
+      render: (value, data) => {
+        if (!data._id) return 'No hay permisos asignados';
+        
+        const permisosPrivilegios = getPermisosPrivilegiosDelRol(data._id);
+        
+        if (permisosPrivilegios.length === 0) {
+          return 'No hay permisos asignados';
+        }
+        
         return (
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {permisos.map((permiso, index) => (
-              <li key={index}>{permiso.permiso || permiso.nombre}</li>
+          <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+            {permisosPrivilegios.map((item, index) => (
+              <div key={index} style={{ marginBottom: '15px', padding: '10px', border: '1px solid #e0e0e0', borderRadius: '5px' }}>
+                <strong style={{ color: '#2c3e50', fontSize: '14px' }}>
+                  {item.permiso?.permiso || item.permiso?.nombre || 'Permiso sin nombre'}
+                </strong>
+                <div style={{ marginTop: '5px', paddingLeft: '10px' }}>
+                  {item.privilegios.map((privilegio, privIndex) => (
+                    <span 
+                      key={privIndex}
+                      style={{ 
+                        display: 'inline-block',
+                        backgroundColor: '#3498db',
+                        color: 'white',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        marginRight: '5px',
+                        marginBottom: '3px'
+                      }}
+                    >
+                      {privilegio.nombre_privilegio || privilegio.nombre}
+                    </span>
+                  ))}
+                </div>
+              </div>
             ))}
-          </ul>
-        );
-      }
-    },
-    { 
-      id: 'privilegios', 
-      label: 'Privilegios',
-      render: (privilegios) => {
-        if (!Array.isArray(privilegios) || privilegios.length === 0) return 'No hay privilegios asignados';
-        return (
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {privilegios.map((privilegio, index) => (
-              <li key={index}>{privilegio.nombre_privilegio || privilegio.nombre}</li>
-            ))}
-          </ul>
+          </div>
         );
       }
     }

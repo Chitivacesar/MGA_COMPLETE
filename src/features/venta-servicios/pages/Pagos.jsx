@@ -12,7 +12,7 @@ import { SuccessAlert } from '../../../shared/components/SuccessAlert';
 // Form fields configuration
 const getFormFields = () => [
   { 
-    id: 'venta', // CAMBIO: De 'ventas' a 'venta' para coincidir con el modelo
+    id: 'ventas',  // Actualizado de 'venta' a 'ventas'
     label: 'ID de Venta *',
     type: 'text',
     required: true,
@@ -46,7 +46,7 @@ const getFormFields = () => [
     placeholder: 'Ingrese el valor total del pago'
   },
   { 
-    id: 'descripcion', // CAMBIO: De 'comprobante' a 'descripcion'
+    id: 'descripcion',
     label: 'Descripción', 
     type: 'text',
     required: false,
@@ -73,6 +73,46 @@ const getFormFields = () => [
   }
 ];
 
+// Función auxiliar CORREGIDA para obtener información del beneficiario
+const getBeneficiarioInfo = (payment) => {
+  console.log('=== getBeneficiarioInfo ===');
+  console.log('Payment structure:', JSON.stringify(payment, null, 2));
+  
+  let beneficiario = null;
+  
+  // Actualizado para usar el campo correcto de la respuesta
+  if (payment.ventas?.beneficiario && typeof payment.ventas.beneficiario === 'object') {
+    const bene = payment.ventas.beneficiario;
+    beneficiario = {
+      nombre: bene.nombre || '',
+      apellido: bene.apellido || '',
+      documento: bene.numero_de_documento || 'No disponible',
+      telefono: bene.telefono || 'No disponible'
+    };
+    console.log('Found beneficiario:', beneficiario);
+  } else {
+    console.log('No se encontró información del beneficiario en:', payment);
+  }
+  
+  return beneficiario;
+};
+
+// Función para formatear nombre completo
+const formatearNombreCompleto = (beneficiario) => {
+  if (!beneficiario) return 'No disponible';
+  
+  let nombreCompleto = '';
+  
+  if (beneficiario.nombre) {
+    nombreCompleto = beneficiario.nombre.trim();
+    if (beneficiario.apellido && beneficiario.apellido.trim() !== '') {
+      nombreCompleto += ` ${beneficiario.apellido.trim()}`;
+    }
+  }
+  
+  return nombreCompleto || 'Sin nombre';
+};
+
 const Pagos = () => {
   const [payments, setPayments] = useState([]);
   const [selectedPayment, setSelectedPayment] = useState(null);
@@ -96,52 +136,20 @@ const Pagos = () => {
     setSelectedPayment(null);
   };
 
-  // Columnas actualizadas para mostrar la información correcta
+  // Columnas actualizadas con la función corregida
   const columns = [
     { 
       id: 'beneficiario', 
       label: 'Beneficiario',
       render: (value, row) => {
-        console.log('=== DEBUG BENEFICIARIO COLUMN ===');
-        console.log('Full row data:', JSON.stringify(row, null, 2));
-        console.log('row.venta exists:', !!row.venta);
-        console.log('row.venta?.beneficiario exists:', !!row.venta?.beneficiario);
-        
-        // Revisar diferentes posibles estructuras
-        let beneficiario = null;
-        
-        // Opción 1: row.venta.beneficiario (como esperamos)
-        if (row.venta?.beneficiario) {
-          beneficiario = row.venta.beneficiario;
-          console.log('Found beneficiario in row.venta.beneficiario:', beneficiario);
-        }
-        // Opción 2: Directamente en row.beneficiario
-        else if (row.beneficiario) {
-          beneficiario = row.beneficiario;
-          console.log('Found beneficiario in row.beneficiario:', beneficiario);
-        }
-        // Opción 3: En row.venta pero sin populate
-        else if (row.venta && typeof row.venta === 'string') {
-          console.log('Venta is just an ID string:', row.venta);
-          return 'Venta no poblada';
-        }
-        
-        if (beneficiario) {
-          const nombre = beneficiario.nombre || '';
-          const apellido = beneficiario.apellido || '';
-          const nombreCompleto = `${nombre} ${apellido}`.trim();
-          console.log('Final beneficiario name:', nombreCompleto);
-          return nombreCompleto || 'Sin nombre';
-        }
-        
-        console.log('No beneficiario found, returning No disponible');
-        return 'No disponible';
+        const beneficiario = getBeneficiarioInfo(row);
+        return formatearNombreCompleto(beneficiario);
       }
     },
     { 
       id: 'valor_total', 
       label: 'Valor Total', 
-      render: (value) => `$${value ? value.toLocaleString() : '0'}` 
+      render: (value, row) => `$${(row.ventas?.valor_total || 0).toLocaleString('es-CO')}` 
     },
     { 
       id: 'fechaPago', 
@@ -161,14 +169,16 @@ const Pagos = () => {
           'pendiente': '🟡 Pendiente',
           'completado': '🟢 Completado',
           'fallido': '🔴 Fallido',
-          'cancelado': '⚫ Cancelado'
+          'cancelado': '⚫ Cancelado',
+          'pagado': '🟢 Pagado',
+          'anulado': '⚫ Anulado'
         };
         return estados[value] || value || 'No disponible';
       }
     }
   ];
 
-  // Campos de detalle actualizados
+  // Campos de detalle actualizados para la nueva estructura
   const detailFields = [
     { 
       id: 'historial', 
@@ -176,10 +186,9 @@ const Pagos = () => {
         console.log('=== RENDERING DETAIL ===');
         console.log('Data received:', JSON.stringify(data, null, 2));
         
-        // Extraer información del beneficiario - CORREGIDO
-        const beneficiario = data.venta?.beneficiario;
-        const beneficiarioNombre = beneficiario ? 
-          `${beneficiario.nombre || ''} ${beneficiario.apellido || ''}`.trim() : 'No disponible';
+        // ACTUALIZADO: Usar la función auxiliar corregida
+        const beneficiario = getBeneficiarioInfo(data);
+        const beneficiarioNombre = formatearNombreCompleto(beneficiario);
         
         return (
           <Box sx={{ 
@@ -206,22 +215,33 @@ const Pagos = () => {
               </Grid>
             </Grid>
             
-            {/* Información del beneficiario - CORREGIDO */}
+            {/* Información del beneficiario - ACTUALIZADO */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
               <Grid item xs={12}>
                 <Box sx={{ p: 2, backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
                   <Typography variant="subtitle2" sx={{ color: '#666', mb: 1 }}>Beneficiario:</Typography>
                   <Typography variant="body1" sx={{ fontWeight: 500 }}>{beneficiarioNombre}</Typography>
                   
-                  {/* CORREGIDO: Usar campos correctos del beneficiario */}
+                  {/* ACTUALIZADO: Usar campos correctos según el modelo */}
                   {beneficiario?.telefono && (
                     <Typography variant="body2" sx={{ color: '#666', mt: 1 }}>
                       Teléfono: {beneficiario.telefono}
                     </Typography>
                   )}
-                  {beneficiario?.tipo_de_documento && beneficiario?.numero_de_documento && (
+                  {beneficiario?.email && (
                     <Typography variant="body2" sx={{ color: '#666' }}>
-                      Documento: {beneficiario.tipo_de_documento} {beneficiario.numero_de_documento}
+                      Email: {beneficiario.email}
+                    </Typography>
+                  )}
+                  {beneficiario?.documento && (
+                    <Typography variant="body2" sx={{ color: '#666' }}>
+                      Documento: {beneficiario.documento}
+                    </Typography>
+                  )}
+                  {/* Campos adicionales del modelo corregido */}
+                  {beneficiario?.tipo_de_documento && (
+                    <Typography variant="body2" sx={{ color: '#666' }}>
+                      Tipo de Documento: {beneficiario.tipo_de_documento}
                     </Typography>
                   )}
                   {beneficiario?.direccion && (
@@ -286,34 +306,53 @@ const Pagos = () => {
               </Grid>
             )}
             
-            {/* Información de la venta - CORREGIDO */}
-            {data.venta && (
+            {/* Información de la venta - ACTUALIZADO */}
+            {data.ventas && (
               <Grid container spacing={2} sx={{ mb: 3 }}>
                 <Grid item xs={12}>
                   <Box sx={{ p: 2, backgroundColor: '#e3f2fd', borderRadius: '8px' }}>
                     <Typography variant="subtitle2" sx={{ color: '#666', mb: 1 }}>Información de la Venta:</Typography>
                     <Typography variant="body2" sx={{ color: '#666' }}>
-                      ID: {data.venta._id}
+                      ID: {data.ventas._id || 'No disponible'}
                     </Typography>
-                    {data.venta.codigoVenta && (
+                    {data.ventas.codigoVenta && (
                       <Typography variant="body2" sx={{ color: '#666' }}>
-                        Código: {data.venta.codigoVenta}
+                        Código: {data.ventas.codigoVenta}
                       </Typography>
                     )}
-                    <Typography variant="body2" sx={{ color: '#666' }}>
-                      Tipo: {data.venta.tipo || 'No disponible'}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: '#666' }}>
-                      Estado: {data.venta.estado || 'No disponible'}
-                    </Typography>
-                    {data.venta.fechaInicio && (
+                    {data.ventas.tipo && (
                       <Typography variant="body2" sx={{ color: '#666' }}>
-                        Fecha Inicio: {new Date(data.venta.fechaInicio).toLocaleDateString('es-CO')}
+                        Tipo: {data.ventas.tipo}
                       </Typography>
                     )}
-                    {data.venta.fechaFin && (
+                    {data.ventas.estado && (
                       <Typography variant="body2" sx={{ color: '#666' }}>
-                        Fecha Fin: {new Date(data.venta.fechaFin).toLocaleDateString('es-CO')}
+                        Estado: {data.ventas.estado}
+                      </Typography>
+                    )}
+                    {data.ventas.valor_total && (
+                      <Typography variant="body2" sx={{ color: '#666' }}>
+                        Valor Venta: ${data.ventas.valor_total.toLocaleString()}
+                      </Typography>
+                    )}
+                    {data.ventas.fechaInicio && (
+                      <Typography variant="body2" sx={{ color: '#666' }}>
+                        Fecha Inicio: {new Date(data.ventas.fechaInicio).toLocaleDateString('es-CO')}
+                      </Typography>
+                    )}
+                    {data.ventas.fechaFin && (
+                      <Typography variant="body2" sx={{ color: '#666' }}>
+                        Fecha Fin: {new Date(data.ventas.fechaFin).toLocaleDateString('es-CO')}
+                      </Typography>
+                    )}
+                    {data.ventas.numero_de_clases && (
+                      <Typography variant="body2" sx={{ color: '#666' }}>
+                        Número de Clases: {data.ventas.numero_de_clases}
+                      </Typography>
+                    )}
+                    {data.ventas.ciclo && (
+                      <Typography variant="body2" sx={{ color: '#666' }}>
+                        Ciclo: {data.ventas.ciclo}
                       </Typography>
                     )}
                   </Box>
@@ -331,7 +370,7 @@ const Pagos = () => {
                   justifyContent: 'flex-start'
                 }}>
                   <Typography variant="h6" sx={{ color: '#0455a2' }}>
-                    Valor Total: ${data.valor_total ? data.valor_total.toLocaleString() : '0'}
+                    Valor Total: ${data.ventas?.valor_total ? data.ventas.valor_total.toLocaleString() : '0'}
                   </Typography>
                 </Box>
               </Grid>
@@ -342,29 +381,26 @@ const Pagos = () => {
     }
   ];
 
+  // Función para exportar Excel CORREGIDA
   const handleExportExcel = () => {
     try {
-      console.log('=== EXPORTING TO EXCEL ===');
-      console.log('Payments data:', payments);
+      console.log('=== EXPORTING TO EXCEL CORREGIDO ===');
       
       const workbook = XLSX.utils.book_new();
 
       // Preparar los datos para Excel - CORREGIDO
       const worksheetData = [
-        ['Beneficiario', 'Documento', 'Teléfono', 'Valor Total', 'Fecha Pago', 'Método Pago', 'Estado', 'Descripción', 'Número Transacción'],
+        ['Beneficiario', 'Documento', 'Tipo Documento', 'Teléfono', 'Email', 'Valor Total', 'Fecha Pago', 'Método Pago', 'Estado', 'Descripción', 'Número Transacción'],
         ...payments.map(payment => {
-          const beneficiario = payment.venta?.beneficiario;
-          const beneficiarioNombre = beneficiario ? 
-            `${beneficiario.nombre || ''} ${beneficiario.apellido || ''}`.trim() : 'No disponible';
-          
-          const documento = beneficiario?.tipo_de_documento && beneficiario?.numero_de_documento 
-            ? `${beneficiario.tipo_de_documento} ${beneficiario.numero_de_documento}` 
-            : 'No disponible';
+          const beneficiario = getBeneficiarioInfo(payment);
+          const nombreCompleto = formatearNombreCompleto(beneficiario);
           
           return [
-            beneficiarioNombre,
-            documento,
+            nombreCompleto,
+            beneficiario?.documento || 'No disponible',
+            beneficiario?.tipo_de_documento || 'No disponible',
             beneficiario?.telefono || 'No disponible',
+            beneficiario?.email || 'No disponible',
             payment.valor_total || 0,
             payment.fechaPago ? new Date(payment.fechaPago).toLocaleDateString('es-CO') : 'No disponible',
             payment.metodoPago || 'No disponible',
@@ -392,46 +428,28 @@ const Pagos = () => {
     }
   };
 
-  // Fetch pagos from API
   const fetchPagos = async () => {
     try {
       console.log('=== FETCHING PAGOS ===');
       const response = await axios.get('http://localhost:3000/api/pagos');
+      console.log('API Response:', response.data);
       
-      console.log('=== API RESPONSE DETAILED ===');
-      console.log('Status:', response.status);
-      console.log('Full response:', JSON.stringify(response.data, null, 2));
-      
-      // Verificar si la respuesta tiene el formato correcto
-      let pagosList = [];
-      if (response.data) {
-        if (response.data.success && Array.isArray(response.data.data)) {
-          pagosList = response.data.data;
-        } else if (Array.isArray(response.data)) {
-          pagosList = response.data;
-        }
+      if (response.data && response.data.success) {
+        const pagosFormateados = response.data.data.map(pago => ({
+          ...pago,
+          valor_total: pago.ventas?.valor_total || 0, // Usar el valor_total de la venta
+          valorTotal: pago.ventas?.valor_total || 0,
+          porcentajePagado: pago.ventas?.valor_total ? (pago.valor_total / pago.ventas.valor_total) * 100 : 0
+        }));
+        
+        setPayments(pagosFormateados);
+        console.log('Payments formateados:', pagosFormateados);
       }
-      
-      console.log('=== PROCESSED PAYMENTS LIST ===');
-      console.log('Payments count:', pagosList.length);
-      pagosList.forEach((payment, index) => {
-        console.log(`Payment ${index}:`, JSON.stringify(payment, null, 2));
-        console.log(`Payment ${index} venta:`, payment.venta);
-        console.log(`Payment ${index} venta type:`, typeof payment.venta);
-        if (payment.venta && typeof payment.venta === 'object') {
-          console.log(`Payment ${index} venta.beneficiario:`, payment.venta.beneficiario);
-        }
-      });
-      
-      setPayments(pagosList);
-      
     } catch (error) {
-      console.error('=== FETCH ERROR ===');
-      console.error('Error:', error);
-      setPayments([]);
+      console.error('Error fetching pagos:', error);
       setAlert({
         open: true,
-        message: `Error al cargar los pagos: ${error.message}`
+        message: 'Error al cargar los pagos'
       });
     }
   };
@@ -454,9 +472,8 @@ const Pagos = () => {
     console.log('=== DELETING PAYMENT ===');
     console.log('Payment to delete:', JSON.stringify(payment, null, 2));
     
-    const beneficiario = payment.venta?.beneficiario;
-    const beneficiarioNombre = beneficiario ? 
-      `${beneficiario.nombre || ''} ${beneficiario.apellido || ''}`.trim() : 'este pago';
+    const beneficiario = getBeneficiarioInfo(payment);
+    const beneficiarioNombre = formatearNombreCompleto(beneficiario);
     
     const confirmDelete = window.confirm(`¿Está seguro de eliminar el pago de ${beneficiarioNombre}?`);
     if (confirmDelete) {
@@ -500,7 +517,7 @@ const Pagos = () => {
 
       // Preparar datos según el modelo del backend
       const pagoData = {
-        venta: formData.venta.trim(),
+        ventas: formData.ventas.trim(),  // Actualizado de 'venta' a 'ventas'
         fechaPago: formData.fechaPago,
         metodoPago: formData.metodoPago,
         valor_total: parseFloat(formData.valor_total) || 0,
@@ -616,6 +633,7 @@ const Pagos = () => {
       <GenericList
         data={payments}
         columns={columns}
+        rowKey="_id" // Asegurarse de que esta prop esté presente
         onView={handleView}
         onEdit={handleEdit}
         onDelete={handleDelete}

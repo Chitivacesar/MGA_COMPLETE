@@ -27,7 +27,7 @@ const pagoSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  venta: {
+  ventas: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Venta',
     required: true
@@ -45,14 +45,14 @@ pagoSchema.virtual('valorTotal').get(function() {
 // Virtual corregido para información del beneficiario
 pagoSchema.virtual('beneficiario').get(function() {
   // Solo devolver información si existe la venta populada con beneficiario
-  if (this.venta && this.venta.beneficiarioId) {
+  if (this.ventas && this.ventas.beneficiarioId) {
     return {
-      _id: this.venta.beneficiarioId._id,
-      nombre: this.venta.beneficiarioId.nombre || 'Sin nombre',
-      apellido: this.venta.beneficiarioId.apellido || 'Sin apellido',
-      email: this.venta.beneficiarioId.email || 'Sin email',
-      documento: this.venta.beneficiarioId.documento || 'Sin documento',
-      telefono: this.venta.beneficiarioId.telefono || 'Sin teléfono'
+      _id: this.ventas.beneficiarioId._id,
+      nombre: this.ventas.beneficiarioId.nombre || 'Sin nombre',
+      apellido: this.ventas.beneficiarioId.apellido || 'Sin apellido',
+      email: this.ventas.beneficiarioId.email || 'Sin email',
+      documento: this.ventas.beneficiarioId.documento || 'Sin documento',
+      telefono: this.ventas.beneficiarioId.telefono || 'Sin teléfono'
     };
   }
   return null;
@@ -60,15 +60,15 @@ pagoSchema.virtual('beneficiario').get(function() {
 
 // Virtual para información de la venta
 pagoSchema.virtual('infoVenta').get(function() {
-  if (this.venta) {
+  if (this.ventas) {
     return {
-      _id: this.venta._id,
-      tipo: this.venta.tipo || 'Sin tipo',
-      fechaInicio: this.venta.fechaInicio,
-      fechaFin: this.venta.fechaFin,
-      estado: this.venta.estado || 'Sin estado',
-      valor_total: this.venta.valor_total || 0,
-      valorTotal: this.venta.valor_total || 0
+      _id: this.ventas._id,
+      tipo: this.ventas.tipo || 'Sin tipo',
+      fechaInicio: this.ventas.fechaInicio,
+      fechaFin: this.ventas.fechaFin,
+      estado: this.ventas.estado || 'Sin estado',
+      valor_total: this.ventas.valor_total || 0,
+      valorTotal: this.ventas.valor_total || 0
     };
   }
   return null;

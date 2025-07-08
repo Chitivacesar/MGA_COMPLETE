@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { GenericList } from "../../../shared/components/GenericList"
 import { DetailModal } from "../../../shared/components/DetailModal"
 import { FormModal } from "../../../shared/components/FormModal"
@@ -9,6 +9,7 @@ import { UserRoleAssignment } from "../../../shared/components/UserRoleAssignmen
 import { Button, Box, IconButton } from "@mui/material"
 import { PersonAdd as PersonAddIcon, Visibility as VisibilityIcon, VisibilityOff as VisibilityOffIcon } from "@mui/icons-material"
 import { usuariosService, rolesService, usuariosHasRolService } from "../../../shared/services/api"
+import { toast } from 'react-toastify'
 
 const Usuarios = () => {
   const [roles, setRoles] = useState([])
@@ -23,31 +24,62 @@ const Usuarios = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        console.log('Iniciando fetchData...');
-        const [usuariosData, rolesData, usuariosHasRolData] = await Promise.all([
+        const [usuariosResp, rolesResp, usuariosHasRolResp] = await Promise.all([
           usuariosService.getAll(),
           rolesService.getAll(),
           usuariosHasRolService.getAll()
         ]);
-        
-        console.log('Datos recibidos:', { usuariosData, rolesData, usuariosHasRolData });
-        
-        // Verificar si tenemos los datos necesarios
-        if (!Array.isArray(usuariosData)) {
-          throw new Error('No se recibieron datos de usuarios válidos');
-        }
-        
-        // Asignar roles a cada usuario, manejando el caso cuando no hay datos de roles
+
+        // Extraer arrays de la respuesta, protegiendo si vienen como objeto
+        const usuariosData = Array.isArray(usuariosResp)
+          ? usuariosResp
+          : (Array.isArray(usuariosResp?.usuarios) ? usuariosResp.usuarios : []);
+        const rolesData = Array.isArray(rolesResp)
+          ? rolesResp
+          : (Array.isArray(rolesResp?.roles) ? rolesResp.roles : []);
+        const usuariosHasRolData = Array.isArray(usuariosHasRolResp)
+          ? usuariosHasRolResp
+          : (Array.isArray(usuariosHasRolResp?.asignaciones) ? usuariosHasRolResp.asignaciones : []);
+
+        console.log('Datos cargados:', {
+          usuarios: usuariosData,
+          roles: rolesData,
+          asignaciones: usuariosHasRolData
+        });
+
+        // Asignar roles a cada usuario
         const usuariosConRoles = usuariosData.map(usuario => {
-          const asignacionesUsuario = Array.isArray(usuariosHasRolData) 
-            ? usuariosHasRolData.filter(
-                asignacion => asignacion?.usuarioId?._id === usuario._id
-              )
-            : [];
+          // Obtener todas las asignaciones del usuario
+          const asignacionesUsuario = usuariosHasRolData.filter(
+            asignacion => 
+              asignacion.usuarioId && 
+              asignacion.usuarioId._id === usuario._id
+          );
           
-          const rolesUsuario = asignacionesUsuario
-            .map(asignacion => asignacion?.rolId)
-            .filter(Boolean);
+          console.log(`Todas las asignaciones para usuario ${usuario.nombre}:`, asignacionesUsuario);
+          
+          // Agrupar asignaciones por rolId y mantener solo la más reciente por cada rol
+          const asignacionesPorRol = asignacionesUsuario.reduce((acc, asignacion) => {
+            const rolId = asignacion.rolId._id;
+            if (!acc[rolId] || new Date(acc[rolId].createdAt) < new Date(asignacion.createdAt)) {
+              acc[rolId] = asignacion;
+            }
+            return acc;
+          }, {});
+
+          // Filtrar solo las asignaciones activas más recientes
+          const asignacionesActivas = Object.values(asignacionesPorRol).filter(
+            asignacion => asignacion.estado === true
+          );
+          
+          console.log(`Asignaciones activas más recientes para usuario ${usuario.nombre}:`, asignacionesActivas);
+          
+          // Extraer los roles de las asignaciones activas
+          const rolesUsuario = asignacionesActivas
+            .map(asignacion => asignacion.rolId)
+            .filter(rol => rol && rol._id); // Asegurar que solo se incluyan roles válidos
+          
+          console.log(`Roles activos para usuario ${usuario.nombre}:`, rolesUsuario);
           
           return {
             ...usuario,
@@ -55,10 +87,12 @@ const Usuarios = () => {
           };
         });
         
+        console.log('Usuarios procesados con roles activos:', usuariosConRoles);
+        
         setUsuarios(usuariosConRoles);
-        setRoles(Array.isArray(rolesData) ? rolesData : []);
+        setRoles(rolesData);
       } catch (error) {
-        console.error('Error detallado al cargar datos:', error);
+        console.error('Error al cargar datos:', error);
       }
     };
 
@@ -71,10 +105,32 @@ const Usuarios = () => {
     setFormModalOpen(true)
   }
 
-  const handleEdit = (usuario) => {
-    setIsEditing(true)
-    setSelectedUsuario(usuario)
-    setFormModalOpen(true)
+  const handleEdit = async (usuario) => {
+    try {
+      // Obtener las asignaciones actuales del usuario
+      const allAssignments = await usuariosHasRolService.getAll();
+      const userAssignments = allAssignments.filter(assignment => 
+        assignment.usuarioId && assignment.usuarioId._id === usuario._id
+      );
+
+      // Obtener todos los roles asignados al usuario
+      const rolesAsignados = userAssignments.map(assignment => 
+        assignment.rolId
+      ).filter(Boolean);
+
+      // Preparar el usuario con sus roles actuales
+      const usuarioConRoles = {
+        ...usuario,
+        roles: rolesAsignados
+      };
+
+      setIsEditing(true);
+      setSelectedUsuario(usuarioConRoles);
+      setFormModalOpen(true);
+    } catch (error) {
+      console.error('Error al cargar los roles del usuario:', error);
+      alert('Error al cargar los roles del usuario');
+    }
   }
 
   const handleDelete = async (usuario) => {
@@ -127,6 +183,38 @@ const Usuarios = () => {
       if (isEditing) {
         // Al editar, no enviamos la contraseña
         const updatedUser = await usuariosService.update(selectedUsuario._id, userData);
+        
+        // Actualizar la asignación de rol si se proporcionó un rolId
+        if (rolId) {
+          try {
+            // Obtener las asignaciones actuales del usuario
+            const allAssignments = await usuariosHasRolService.getAll();
+            const userAssignments = allAssignments.filter(assignment => 
+              assignment.usuarioId && assignment.usuarioId._id === selectedUsuario._id
+            );
+            
+            // Eliminar las asignaciones existentes
+            for (const assignment of userAssignments) {
+              await usuariosHasRolService.delete(assignment._id);
+            }
+
+            // Crear la nueva asignación de rol
+            await usuariosHasRolService.create({
+              usuarioId: selectedUsuario._id,
+              rolId: rolId
+            });
+            
+            // Obtener el rol completo
+            const rol = await rolesService.getById(rolId);
+            
+            // Añadir el rol al usuario actualizado
+            updatedUser.roles = rol ? [rol] : [];
+          } catch (rolError) {
+            console.error('Error al actualizar el rol:', rolError);
+            throw new Error(`Error al actualizar el rol: ${rolError.message}`);
+          }
+        }
+
         setUsuarios((prev) =>
           prev.map((item) =>
             item._id === selectedUsuario._id ? updatedUser : item
@@ -175,8 +263,8 @@ const Usuarios = () => {
     }
   };
 
-  // Modificar formFields para hacer los campos de contraseña opcionales al editar
-  const formFields = [
+  // Definir los campos del formulario según el modo (crear o editar)
+  const formFields = useMemo(() => [
     { 
       id: "nombre", 
       label: "Nombre", 
@@ -190,6 +278,20 @@ const Usuarios = () => {
       type: "text", 
       required: true,
       validation: (value) => !value ? "El apellido es requerido" : null
+    },
+    {
+      id: "tipo_de_documento",
+      label: "Tipo de Documento",
+      type: "select",
+      required: true,
+      validation: (value) => !value ? "El tipo de documento es requerido" : null,
+      options: [
+        { value: "TI", label: "Tarjeta de Identidad" },
+        { value: "CC", label: "Cédula de Ciudadanía" },
+        { value: "CE", label: "Cédula de Extranjería" },
+        { value: "PP", label: "Pasaporte" },
+        { value: "NIT", label: "NIT" }
+      ]
     },
     { 
       id: "documento", 
@@ -220,33 +322,33 @@ const Usuarios = () => {
         label: role.nombre
       }))
     },
-    { 
-      id: "contrasena", 
-      label: "Contraseña", 
-      type: "password", 
-      required: !isEditing, // Solo requerido al crear
-      validation: (value) => {
-        if (!isEditing && !value) return "La contraseña es requerida";
-        if (value) {
-          const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    // Mostrar campos de contraseña solo al crear nuevo usuario
+    ...(!isEditing ? [
+      { 
+        id: "contrasena", 
+        label: "Contraseña", 
+        type: "password", 
+        required: true,
+        validation: (value) => {
+          if (!value) return "La contraseña es requerida";
+          const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%?&])[A-Za-z\d@$!%?&]{8,}$/;
           return passwordRegex.test(value) ? null : "La contraseña debe tener mínimo 8 caracteres con mayúsculas, minúsculas, números y símbolos";
         }
-        return null;
+      },
+      { 
+        id: "confirmacionContrasena", 
+        label: "Confirmar Contraseña", 
+        type: "password", 
+        required: true,
+        validation: (value, formData) => {
+          if (!value) return "La confirmación de contraseña es requerida";
+          if (value !== formData.contrasena) return "Las contraseñas no coinciden";
+          return null;
+        }
       }
-    },
-    { 
-      id: "confirmacionContrasena", 
-      label: "Confirmar Contraseña", 
-      type: "password", 
-      required: !isEditing, // Solo requerido al crear
-      validation: (value, formData) => {
-        if (!isEditing && !value) return "La confirmación de contraseña es requerida";
-        if (value && value !== formData.contrasena) return "Las contraseñas no coinciden";
-        return null;
-      }
-    },
+    ] : []),
     { id: "estado", label: "Estado", type: "switch", defaultValue: true },
-  ];
+  ], [roles, isEditing]);
 
   const handleToggleStatus = async (usuarioId) => {
     try {
@@ -269,49 +371,101 @@ const Usuarios = () => {
   const handleSaveRoleAssignment = async (data) => {
     try {
       const { userId, roleIds } = data;
+      console.log('Guardando asignación de roles:', { userId, roleIds });
 
-      // Obtener las asignaciones actuales del usuario
-      const allAssignments = await usuariosHasRolService.getAll();
-      const userAssignments = allAssignments.filter(assignment => assignment.usuarioId === userId);
-      
-      // Eliminar las asignaciones existentes
-      for (const assignment of userAssignments) {
-        await usuariosHasRolService.delete(assignment._id);
-      }
-
-      // Crear nuevas asignaciones de roles
-      const assignmentPromises = roleIds.map(roleId =>
-        usuariosHasRolService.create({
+      // Crear nuevas asignaciones para cada rol seleccionado
+      console.log('Creando asignaciones para roles:', roleIds);
+      const assignmentPromises = roleIds.map(roleId => {
+        const newAssignment = {
           usuarioId: userId,
-          rolId: roleId
-        })
-      );
+          rolId: roleId,
+          estado: true
+        };
+        console.log('Creando asignación:', newAssignment);
+        return usuariosHasRolService.create(newAssignment);
+      });
 
       await Promise.all(assignmentPromises);
 
-      // Actualizar la lista de usuarios
-      const updatedUser = await usuariosService.getById(userId);
+      // Obtener los roles actualizados del usuario usando el endpoint modificado
+      const updatedRoles = await usuariosHasRolService.getByUsuarioId(userId);
+      console.log('Roles actualizados del usuario:', updatedRoles);
       
-      // Obtener los roles completos para el usuario
-      const roles = await rolesService.getAll();
-      const userRoles = roles.filter(role => roleIds.includes(role._id));
+      // Recargar todos los datos para asegurar que tenemos la información más actualizada
+      const [updatedUsers, allRoles, updatedAssignments] = await Promise.all([
+        usuariosService.getAll(),
+        rolesService.getAll(),
+        usuariosHasRolService.getAll()
+      ]);
+
+      // Procesar los usuarios con sus roles actualizados
+      const usuariosConRoles = updatedUsers.map(usuario => {
+        const asignacionesUsuario = updatedAssignments.filter(
+          asignacion => asignacion.usuarioId && asignacion.usuarioId._id === usuario._id
+        );
+
+        // Agrupar por rolId y mantener solo la más reciente
+        const asignacionesPorRol = asignacionesUsuario.reduce((acc, asignacion) => {
+          const rolId = asignacion.rolId._id;
+          if (!acc[rolId] || new Date(acc[rolId].createdAt) < new Date(asignacion.createdAt)) {
+            acc[rolId] = asignacion;
+          }
+          return acc;
+        }, {});
+
+        // Filtrar solo las asignaciones activas
+        const rolesActivos = Object.values(asignacionesPorRol)
+          .filter(asignacion => asignacion.estado === true)
+          .map(asignacion => asignacion.rolId);
+
+        return {
+          ...usuario,
+          roles: rolesActivos
+        };
+      });
+
+      // Actualizar el estado local
+      setUsuarios(usuariosConRoles);
+      setRoles(allRoles);
+
+      // Actualizar el usuario seleccionado si está siendo mostrado
+      if (selectedUsuario && selectedUsuario._id === userId) {
+        const usuarioActualizado = usuariosConRoles.find(u => u._id === userId);
+        setSelectedUsuario(usuarioActualizado);
+      }
+
+      // Cerrar el modal de asignación de roles
+      setRoleAssignmentOpen(false);
       
-      // Añadir los roles al usuario actualizado
-      updatedUser.roles = userRoles;
-      
-      setUsuarios(prev =>
-        prev.map(user => user._id === userId ? updatedUser : user)
-      );
+      // Mostrar mensaje de éxito
+      toast.success('Roles asignados correctamente');
     } catch (error) {
       console.error('Error al asignar roles:', error);
+      toast.error('Error al asignar roles: ' + error.message);
     }
   }
 
   const columns = [
     { id: "nombre", label: "Nombre" },
     { id: "apellido", label: "Apellido" },
+    { id: "tipo_de_documento", label: "Tipo de Documento" },
     { id: "documento", label: "N° Documento" },
     { id: "correo", label: "Correo" },
+    {
+      id: "roles",
+      label: "Roles Actuales",
+      render: (_, row) => {
+        if (row.roles && Array.isArray(row.roles) && row.roles.length > 0) {
+          return row.roles.map(rol => {
+            if (typeof rol === 'object' && rol !== null) {
+              return rol.nombre || (rol.rolId && rol.rolId.nombre) || 'Rol sin nombre';
+            }
+            return 'Rol sin nombre';
+          }).join(", ");
+        }
+        return "Sin roles asignados";
+      }
+    },
     {
       id: "estado",
       label: "Estado",
@@ -340,7 +494,8 @@ const Usuarios = () => {
   const detailFields = [
     { id: "nombre", label: "Nombre" },
     { id: "apellido", label: "Apellido" },
-    { id: "documento", label: "Documento" },
+    { id: "tipo_de_documento", label: "Tipo de Documento" },
+    { id: "documento", label: "Número de Documento" },
     { id: "correo", label: "Correo" },
     {
       id: "roles",
@@ -362,7 +517,6 @@ const Usuarios = () => {
           }
           return "Sin rol asignado";
         }
-        
         // Si estamos en la tabla, usar el valor de la fila
         if (value && Array.isArray(value) && value.length > 0) {
           return value.map(rol => {
@@ -375,7 +529,21 @@ const Usuarios = () => {
         return "Sin rol asignado";
       },
     },
-    // Se ha eliminado la visualización de contraseña por motivos de seguridad
+    {
+      id: "contrasena",
+      label: "Contraseña",
+      render: (value, row) => (
+        <Box sx={{ display: "flex", alignItems: "center" }}>
+          {showPasswords[row._id] ? value : "••••••••"}
+          <IconButton
+            size="small"
+            onClick={() => setShowPasswords(prev => ({ ...prev, [row._id]: !prev[row._id] }))}
+          >
+            {showPasswords[row._id] ? <VisibilityOffIcon /> : <VisibilityIcon />}
+          </IconButton>
+        </Box>
+      ),
+    },
     { id: "estado", label: "Estado", render: (value) => <StatusButton active={value} /> },
   ]
 

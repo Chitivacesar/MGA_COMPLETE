@@ -7,9 +7,10 @@ import { StatusButton } from '../../../shared/components/StatusButton';
 import { SuccessAlert } from '../../../shared/components/SuccessAlert';
 import { PictureAsPdf as PdfIcon } from '@mui/icons-material';
 import { createProfessorUser } from '../../../shared/services/professorService';
-import { Box, Chip, Select, MenuItem, Checkbox, ListItemText, Button } from '@mui/material';
+import { Box, Chip, Select, MenuItem, Checkbox, ListItemText, Button, TextField } from '@mui/material';
 import { Calendar } from '../components/Calendar';
 import { ScheduleModal } from '../components/ScheduleModal';
+import Autocomplete from '@mui/material/Autocomplete';
 
 const Profesores = () => {
   // Define especialidades at the beginning
@@ -39,6 +40,9 @@ const Profesores = () => {
     open: false,
     message: ''
   });
+  const [usuarios, setUsuarios] = useState([]);
+  const [inputNombre, setInputNombre] = useState('');
+  const [loadingUsuarios, setLoadingUsuarios] = useState(false);
 
   // Define columns with unique keys
   const columns = [
@@ -61,7 +65,7 @@ const Profesores = () => {
     }
   ];
 
-  // Detail fields configuration
+  // Detail fields configuration - SIN CAMPO DE PROGRAMACIÓN
   const detailFields = [
     { id: 'nombres', label: 'Nombres' },
     { id: 'apellidos', label: 'Apellidos' },
@@ -92,25 +96,6 @@ const Profesores = () => {
         </Box>
       )
     },
-    { 
-      id: 'programacion', 
-      label: 'Programación', 
-      render: (value) => (
-        <Box>
-          {value && value.length > 0 ? (
-            value.map((prog, idx) => (
-              <Chip 
-                key={`detail-schedule-${idx}`}
-                label={`${prog.dia}: ${prog.horaInicio} - ${prog.horaFin}`} 
-                sx={{ m: 0.5 }} 
-              />
-            ))
-          ) : (
-            <span>No hay programación asignada</span>
-          )}
-        </Box>
-      )
-    },
     { id: 'estado', label: 'Estado', render: (value) => <StatusButton active={value === 'Activo'} /> }
   ];
 
@@ -131,16 +116,57 @@ const Profesores = () => {
     }
   };
 
+  // Cargar usuarios para el autocompletado - VERSION MEJORADA
+  const fetchUsuarios = async () => {
+    try {
+      setLoadingUsuarios(true);
+      console.log('=== FETCHING USUARIOS ===');
+      const response = await axios.get('http://localhost:3000/api/usuarios');
+      console.log('Response completa:', response.data);
+      
+      // Verificar diferentes estructuras de respuesta
+      let lista = [];
+      if (Array.isArray(response.data)) {
+        lista = response.data;
+      } else if (response.data.usuarios && Array.isArray(response.data.usuarios)) {
+        lista = response.data.usuarios;
+      } else if (response.data.data && Array.isArray(response.data.data)) {
+        lista = response.data.data;
+      }
+      
+      console.log('Lista de usuarios procesada:', lista);
+      console.log('Cantidad de usuarios:', lista.length);
+      
+      setUsuarios(lista);
+    } catch (error) {
+      console.error('Error al cargar usuarios:', error);
+      console.error('Error response:', error.response?.data);
+      setAlert({
+        open: true,
+        message: 'Error al cargar los usuarios'
+      });
+    } finally {
+      setLoadingUsuarios(false);
+    }
+  };
+
   // Load professors on component mount
   useEffect(() => {
     fetchProfessors();
   }, []);
+
+  useEffect(() => {
+    if (formModalOpen) {
+      fetchUsuarios();
+    }
+  }, [formModalOpen]);
 
   const handleCreate = () => {
     setIsEditing(false);
     setSelectedProfessor(null);
     setTempProgramacion([]);
     setFormData({});
+    setInputNombre('');
     setFormModalOpen(true);
   };
 
@@ -160,6 +186,7 @@ const Profesores = () => {
     
     setSelectedProfessor(professorForEdit);
     setTempProgramacion(professor.programacion || []);
+    setInputNombre('');
     setFormModalOpen(true);
   };
 
@@ -214,6 +241,33 @@ const Profesores = () => {
         return;
       }
 
+      // Validar formato de nombres y apellidos
+      const nombreRegex = /^[a-zA-ZáéíóúÁÉÍÓÚüÜñÑ .'-]+$/;
+      if (!nombreRegex.test(formData.nombres)) {
+        setAlert({
+          open: true,
+          message: "El nombre solo permite letras, espacios, puntos, apóstrofes y guiones"
+        });
+        return;
+      }
+      if (!nombreRegex.test(formData.apellidos)) {
+        setAlert({
+          open: true,
+          message: "El apellido solo permite letras, espacios, puntos, apóstrofes y guiones"
+        });
+        return;
+      }
+
+      // Validar formato de identificación (solo números)
+      const identificacionRegex = /^[0-9]+$/;
+      if (!identificacionRegex.test(formData.identificacion)) {
+        setAlert({
+          open: true,
+          message: "El número de identificación solo permite números"
+        });
+        return;
+      }
+
       // Validar formato de correo electrónico
       const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
       if (!emailRegex.test(formData.correo)) {
@@ -249,38 +303,8 @@ const Profesores = () => {
         professorData.programacion = tempProgramacion;
       }
 
-      // Para nuevos profesores, validar y agregar contraseñas
-      if (!isEditing) {
-        if (!formData.contraseña || !formData.confirmacionContraseña) {
-          setAlert({
-            open: true,
-            message: 'Las contraseñas son obligatorias para nuevos profesores'
-          });
-          return;
-        }
-
-        // Validar longitud mínima de contraseña (según modelo: mínimo 6)
-        if (formData.contraseña.length < 6) {
-          setAlert({
-            open: true,
-            message: 'La contraseña debe tener al menos 6 caracteres'
-          });
-          return;
-        }
-
-        if (formData.contraseña !== formData.confirmacionContraseña) {
-          setAlert({
-            open: true,
-            message: 'Las contraseñas no coinciden'
-          });
-          return;
-        }
-
-        professorData.contraseña = formData.contraseña;
-        professorData.confirmacionContraseña = formData.confirmacionContraseña;
-      }
-
-      console.log('Datos finales a enviar:', professorData);
+      // Para nuevos profesores, NO validar ni agregar contraseñas
+      // (Eliminado el bloque de validación y asignación de contraseñas)
 
       // Realizar petición HTTP
       const config = {
@@ -294,70 +318,35 @@ const Profesores = () => {
           professorData,
           config
         );
-        
         setAlert({
           open: true,
           message: 'Profesor actualizado correctamente'
         });
       } else {
         try {
-          // Crear el profesor
+          // Usar el usuario seleccionado (NO crear usuario nuevo)
+          const profesorDataConUsuario = {
+            ...professorData,
+            usuarioId: formData.usuarioId // Usar el usuarioId seleccionado
+          };
           const professorResponse = await axios.post(
             'http://localhost:3000/api/profesores',
-            professorData,
+            profesorDataConUsuario,
             config
           );
-          
-          console.log('Profesor creado:', professorResponse.data);
-          
-          // Crear el usuario con los mismos datos
-          const usuarioData = {
-            correo: professorData.correo,
-            contrasena: professorData.contraseña,
-            confirmacionContrasena: professorData.confirmacionContraseña,
-            nombre: professorData.nombres,
-            apellido: professorData.apellidos,
-            documento: professorData.identificacion,
-            estado: professorData.estado === 'Activo'
-          };
-          
-          console.log('Datos de usuario a crear:', usuarioData);
-          
-          const usuarioResponse = await axios.post(
-            'http://localhost:3000/api/usuarios',
-            usuarioData,
-            config
-          );
-          
-          console.log('Usuario creado:', usuarioResponse.data);
-          
-          // Obtener el ID del rol de profesor (asumiendo que existe)
+          // 3. Asignar rol de profesor (opcional, si tu lógica lo requiere)
           const rolesResponse = await axios.get('http://localhost:3000/api/roles');
           const profesorRol = rolesResponse.data.find(rol => rol.nombre.toLowerCase() === 'profesor');
-          
-          if (!profesorRol) {
-            console.error('No se encontró el rol de profesor');
-            throw new Error('No se encontró el rol de profesor');
+          if (profesorRol) {
+            await axios.post(
+              'http://localhost:3000/api/usuarios-has-rol', // corregido a guiones
+              {
+                usuarioId: formData.usuarioId,
+                rolId: profesorRol._id
+              },
+              config
+            );
           }
-          
-          console.log('Rol de profesor encontrado:', profesorRol);
-          
-          // Crear la relación usuario_has_rol
-          const usuarioHasRolData = {
-            usuarioId: usuarioResponse.data._id,
-            rolId: profesorRol._id
-          };
-          
-          console.log('Datos de usuario_has_rol a crear:', usuarioHasRolData);
-          
-          const usuarioHasRolResponse = await axios.post(
-            'http://localhost:3000/api/usuarios_has_rol',
-            usuarioHasRolData,
-            config
-          );
-          
-          console.log('Relación usuario_has_rol creada:', usuarioHasRolResponse.data);
-          
           setAlert({
             open: true,
             message: 'Profesor creado correctamente y asignado al rol de profesor'
@@ -365,7 +354,7 @@ const Profesores = () => {
         } catch (error) {
           console.error('Error en el proceso de creación:', error);
           console.error('Detalles del error:', error.response?.data);
-          throw error; // Re-lanzar el error para que sea manejado por el catch exterior
+          throw error;
         }
       }
 
@@ -444,6 +433,7 @@ const Profesores = () => {
     setIsEditing(false);
     setTempProgramacion([]);
     setFormData({});
+    setInputNombre('');
   };
 
   const handleOpenScheduleModal = (data) => {
@@ -501,111 +491,136 @@ const Profesores = () => {
     });
   };
 
-  // Form fields configuration - Función dinámica
-  const getFormFields = () => [
-    { 
-      id: 'nombres',
-      label: 'Nombres *',
-      type: 'text',
-      required: true,
-      placeholder: 'Ingrese los nombres'
-    },
-    { 
-      id: 'apellidos',
-      label: 'Apellidos *', 
-      type: 'text',
-      required: true,
-      placeholder: 'Ingrese los apellidos'
-    },
-    {
-      id: 'tipoDocumento',
-      label: 'Tipo de Documento *',
-      type: 'select',
-      options: [
-        { value: 'CC', label: 'Cédula de Ciudadanía' },
-        { value: 'CE', label: 'Cédula de Extranjería' },
-        { value: 'TI', label: 'Tarjeta de Identidad' },
-        { value: 'PP', label: 'Pasaporte' },
-        { value: 'RC', label: 'Registro Civil' },
-        { value: 'NIT', label: 'NIT' },
-        { value: 'PEP', label: 'PEP' },
-        { value: 'DNI', label: 'DNI' }
-      ],
-      required: true,
-      defaultValue: 'CC'
-    },
-    { 
-      id: 'identificacion',
-      label: 'Número de Identificación *', 
-      type: 'text',
-      required: true,
-      placeholder: 'Ingrese el número de identificación'
-    },
-    { 
-      id: 'telefono', 
-      label: 'Teléfono *', 
-      type: 'text',
-      required: true,
-      placeholder: 'Ingrese el número de teléfono'
-    },
-    { 
-      id: 'direccion', 
-      label: 'Dirección', 
-      type: 'text',
-      required: false,
-      placeholder: 'Ingrese la dirección completa (opcional)'
-    },
-    { 
-      id: 'correo',
-      label: 'Correo Electrónico *',
-      type: 'email',
-      required: true,
-      placeholder: 'ejemplo@correo.com'
-    },
-    { 
-      id: 'especialidades',
-      label: 'Especialidades *',
-      type: 'multiSelect',
-      options: especialidades.map(esp => ({
-        value: esp,
-        label: esp
-      })),
-      required: true
-    },
-    ...(!isEditing ? [
-      { 
-        id: 'contraseña',
-        label: 'Contraseña *',
-        type: 'password',
+  // Función para filtrar usuarios
+  const filtrarUsuarios = (texto) => {
+    if (!texto || texto.trim() === '') {
+      return usuarios; // Mostrar todos si no hay texto
+    }
+    
+    const textoLower = texto.toLowerCase().trim();
+    return usuarios.filter(u => {
+      const nombre = (u.nombre || '').toLowerCase();
+      const apellido = (u.apellido || '').toLowerCase();
+      const nombreCompleto = `${nombre} ${apellido}`;
+      const correo = (u.correo || '').toLowerCase();
+      const documento = (u.documento || '').toString().toLowerCase();
+      
+      return (
+        nombre.includes(textoLower) ||
+        apellido.includes(textoLower) ||
+        nombreCompleto.includes(textoLower) ||
+        correo.includes(textoLower) ||
+        documento.includes(textoLower)
+      );
+    });
+  };
+
+  // Form fields configuration - Función dinámica CORREGIDA
+  const getFormFields = () => {
+    // Filtrar usuarios que NO estén asociados a un profesor
+    const usuariosConProfesor = professors.map(p => p.correo);
+    // Solo mostrar usuarios cuyo correo NO esté en la lista de profesores
+    const usuariosDisponibles = usuarios.filter(u => !usuariosConProfesor.includes(u.correo));
+
+    const usuarioSeleccionado = usuarios.find(u => u._id === formData.usuarioId) || null;
+    const opcionesFiltradas = filtrarUsuarios(inputNombre);
+    const baseFields = [
+      {
+        id: 'usuarioId',
+        label: 'Usuario *',
+        type: 'select',
         required: true,
-        placeholder: 'Mínimo 6 caracteres',
-        validate: (value) => {
-          if (!value) return 'La contraseña es requerida';
-          if (value.length < 6) return 'La contraseña debe tener al menos 6 caracteres';
-          return undefined;
+        options: usuariosDisponibles.map(user => ({
+          value: user._id,
+          label: `${user.nombre} ${user.apellido} - ${user.correo}`
+        })),
+        onChange: (value, formData, setField) => {
+          const user = usuarios.find(u => u._id === value);
+          if (user) {
+            setField('nombres', user.nombre || '');
+            setField('apellidos', user.apellido || '');
+            setField('correo', user.correo || '');
+            setField('identificacion', user.documento?.toString() || '');
+            setField('tipoDocumento', user.tipo_de_documento || 'CC');
+          } else {
+            setField('nombres', '');
+            setField('apellidos', '');
+            setField('correo', '');
+            setField('identificacion', '');
+            setField('tipoDocumento', 'CC');
+          }
         }
       },
-      {
-        id: 'confirmacionContraseña',
-        label: 'Confirmar Contraseña *',
-        type: 'password',
+      { 
+        id: 'nombres',
+        label: 'Nombres', 
+        type: 'text',
         required: true,
-        placeholder: 'Repita la contraseña',
-        validate: (value, formValues) => {
-          if (!value) return 'La confirmación de contraseña es requerida';
-          if (value !== formValues.contraseña) return 'Las contraseñas no coinciden';
-          return undefined;
-        }
+        disabled: true
+      },
+      { 
+        id: 'apellidos',
+        label: 'Apellidos', 
+        type: 'text',
+        required: true,
+        disabled: true
+      },
+      {
+        id: 'tipoDocumento',
+        label: 'Tipo de documento *',
+        type: 'text', // Cambiado de 'select' a 'text' para solo mostrar el valor heredado
+        required: true,
+        disabled: true // Solo lectura, no editable
+      },
+      { 
+        id: 'identificacion',
+        label: 'Número de Identificación *', 
+        type: 'text',
+        required: true,
+        disabled: true
+      },
+      { 
+        id: 'telefono', 
+        label: 'Teléfono *', 
+        type: 'text',
+        required: true
+      },
+      { 
+        id: 'direccion', 
+        label: 'Dirección', 
+        type: 'text',
+        required: false
+      },
+      { 
+        id: 'correo',
+        label: 'Correo Electrónico *',
+        type: 'email',
+        required: true,
+        disabled: true
+      },
+      { 
+        id: 'especialidades',
+        label: 'Especialidades *',
+        type: 'multiSelect',
+        options: especialidades.map(esp => ({
+          value: esp,
+          label: esp
+        })),
+        required: true
+      },
+      { 
+        id: 'estado',
+        label: 'Estado',
+        type: 'switch',
+        defaultValue: true,
+        helperText: 'Activo permite al profesor iniciar sesión'
       }
-    ] : []),
-    { 
-      id: 'estado',
-      label: 'Estado',
-      type: 'switch',
-      defaultValue: true,
-      helperText: 'Activo permite al profesor iniciar sesión'
-    },
-    {
+    ];
+
+    // NO agregar campos de contraseña
+
+    // Agregar campo de programación
+    baseFields.push({
       id: 'programacion',
       label: 'Programación de Horarios',
       type: 'custom',
@@ -640,8 +655,10 @@ const Profesores = () => {
           </Button>
         </Box>
       )
-    }
-  ];
+    });
+
+    return baseFields;
+  };
   
   return (
     <>

@@ -1,6 +1,38 @@
 const mongoose = require('mongoose');
 
 const ventaSchema = new mongoose.Schema({
+  consecutivo: {
+    type: Number,
+    required: true
+  },
+  codigoVenta: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  beneficiarioId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Beneficiario',
+    required: true
+  },
+  matriculaId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Matricula',
+    default: null
+  },
+  cursoId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Curso',
+    required: true
+  },
+  numero_de_clases: {
+    type: Number,
+    required: true
+  },
+  ciclo: {
+    type: Number,
+    required: true
+  },
   tipo: {
     type: String,
     required: true,
@@ -22,25 +54,13 @@ const ventaSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
-  beneficiarioId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Beneficiario',
-    required: true
-  },
-  matriculaId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Matricula',
-    required: true
-  },
-  curso_has_numero_de_clasesId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'CursoHasNumeroDeClases',
-    required: true
+  motivoAnulacion: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true,
   collection: 'ventas'
 });
 
-// CORREGIDO: Usar exportación estándar en lugar de mongoose.models
 module.exports = mongoose.model('Venta', ventaSchema, 'ventas');
