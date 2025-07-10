@@ -59,6 +59,21 @@ exports.getProfesorById = async (req, res) => {
 exports.createProfesor = async (req, res) => {
   try {
     console.log('Datos recibidos en el controlador:', req.body);
+const mongoose = require('mongoose');
+
+const contadorSchema = new mongoose.Schema({
+  _id: {
+    type: String,
+    required: true // nombre del contador, ej: "ventas"
+  },
+  seq: {
+    type: Number,
+    default: 0
+  }
+});
+
+module.exports = mongoose.model('Contador', contadorSchema, 'contador');
+
     const {
       usuarioId,
       nombres,

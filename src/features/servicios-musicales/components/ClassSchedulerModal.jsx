@@ -1,7 +1,6 @@
 "use client"
 
 import React from "react"
-
 import { useState, useEffect, useMemo } from "react"
 import {
   Dialog,
@@ -20,267 +19,453 @@ import {
   InputLabel,
   Chip,
   alpha,
-  Tooltip,
   useMediaQuery,
   useTheme,
   TextField,
-  FormHelperText,
+  Autocomplete,
+  Card,
+  CardContent,
+  Divider,
+  CircularProgress,
+  Skeleton,
 } from "@mui/material"
-import { Close as CloseIcon, Info as InfoIcon } from "@mui/icons-material"
+import {
+  Close as CloseIcon,
+  Info as InfoIcon,
+  Person as PersonIcon,
+  Schedule as ScheduleIcon,
+  Group as GroupIcon,
+  Remove as RemoveIcon,
+} from "@mui/icons-material"
+import axios from "axios"
 
-// Assuming diasSemana and horasClase are consistent
-const diasSemana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
-const horasClase = [
-  "8:00 - 9:00",
-  "9:00 - 10:00",
-  "10:00 - 11:00",
-  "11:00 - 12:00",
-  "14:00 - 15:00",
-  "15:00 - 16:00",
-  "16:00 - 17:00",
-  "17:00 - 18:00",
-]
-
-// Helper to get class color (assuming it's defined elsewhere or passed as prop)
-const getClassColor = (className) => {
-  // Basic placeholder color logic
-  const colors = ["#4f46e5", "#0891b2", "#7c3aed", "#16a34a", "#ea580c", "#db2777"]
-  let hash = 0
-  if (!className) return "#cccccc"
-  for (let i = 0; i < className.length; i++) {
-    hash = className.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  const index = Math.abs(hash) % colors.length
-  return colors[index]
+// Días de la semana INCLUYENDO DOMINGO
+const diasSemana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+const diasCodigo = {
+  Lunes: "L",
+  Martes: "M",
+  Miércoles: "X",
+  Jueves: "J",
+  Viernes: "V",
+  Sábado: "S",
+  Domingo: "D",
 }
 
-// Estilos personalizados para el scroll
+// Horarios expandidos (6 AM a 11 PM)
+const defaultTimeSlots = [
+  "06:00-07:00",
+  "07:00-08:00",
+  "08:00-09:00",
+  "09:00-10:00",
+  "10:00-11:00",
+  "11:00-12:00",
+  "12:00-13:00",
+  "13:00-14:00",
+  "14:00-15:00",
+  "15:00-16:00",
+  "16:00-17:00",
+  "17:00-18:00",
+  "18:00-19:00",
+  "19:00-20:00",
+  "20:00-21:00",
+  "21:00-22:00",
+  "22:00-23:00",
+]
+
+// Estilos mejorados para scroll
 const scrollbarStyles = {
   "&::-webkit-scrollbar": {
     width: "8px",
     height: "8px",
   },
   "&::-webkit-scrollbar-track": {
-    background: "#f1f1f1",
-    borderRadius: "10px",
+    background: "#f1f3f4",
+    borderRadius: "4px",
   },
   "&::-webkit-scrollbar-thumb": {
-    background: "#c1c1c1",
-    borderRadius: "10px",
-    transition: "background 0.2s ease",
-  },
-  "&::-webkit-scrollbar-thumb:hover": {
     background: "#0455a2",
+    borderRadius: "4px",
+    "&:hover": {
+      background: "#034589",
+    },
   },
   scrollbarWidth: "thin",
-  scrollbarColor: "#c1c1c1 #f1f1f1",
+  scrollbarColor: "#0455a2 #f1f3f4",
 }
 
-export const ClassSchedulerModal = ({
-  isOpen,
-  onClose,
-  onSubmit,
-  profesores = [], // List of all available professors { id, nombre, apellidos, color? }
-  aulas = [], // List of all available classrooms { id, nombre }
-  programacion = [], // Existing schedule data [{ id, hora, lunes, ..., profesor, aula }]
-  clasesDisponibles = [], // List of possible class subjects ["Guitarra Básica", ...]
-  // Nuevos props para controlar la capacidad y estudiantes
-  capacidadClases = {}, // { "Guitarra Básica": 6, "Piano Intermedio": 4, ... }
-  estudiantesPorClase = {}, // { "Lunes-8:00 - 9:00-Guitarra Básica": ["Estudiante1", "Estudiante2"], ... }
-}) => {
-  const [selectedSlots, setSelectedSlots] = useState([]) // [{ dia, hora }]
-  const [selectedClass, setSelectedClass] = useState("")
-  const [selectedProfesor, setSelectedProfesor] = useState("")
-  const [selectedAula, setSelectedAula] = useState("")
-  const [nombreEstudiante, setNombreEstudiante] = useState("")
+export const ClassSchedulerModal = ({ isOpen, onClose, onSubmit }) => {
+  const [profesores, setProfesores] = useState([])
+  const [profesorSeleccionado, setProfesorSeleccionado] = useState("")
+  const [programacionProfesor, setProgramacionProfesor] = useState(null)
+  const [horariosDisponibles, setHorariosDisponibles] = useState([])
+  const [selectedSlot, setSelectedSlot] = useState(null)
+  const [beneficiarios, setBeneficiarios] = useState([])
+  const [beneficiarioPrincipal, setBeneficiarioPrincipal] = useState(null)
+  const [beneficiariosAdicionales, setBeneficiariosAdicionales] = useState([])
+  const [especialidadSeleccionada, setEspecialidadSeleccionada] = useState("")
+  const [observaciones, setObservaciones] = useState("")
+  const [loadingHorarios, setLoadingHorarios] = useState(false)
+  const [clasesExistentes, setClasesExistentes] = useState([])
+
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down("md"))
-  const [hoveredSlot, setHoveredSlot] = useState(null) // Para mostrar info adicional en hover
 
+  // Cargar profesores con programación activa
   useEffect(() => {
-    // Reset state when modal opens
-    if (isOpen) {
-      setSelectedSlots([])
-      setSelectedClass("")
-      setSelectedProfesor("")
-      setSelectedAula("")
-      setNombreEstudiante("")
-    }
-  }, [isOpen])
+    const fetchProfesores = async () => {
+      try {
+        const response = await axios.get("http://localhost:3000/api/programacion_de_profesores")
+        const profesoresActivos = response.data
+          .filter((prog) => prog.estado === "activo")
+          .map((prog) => ({
+            id: prog.profesor._id || prog.profesor,
+            nombre: prog.profesor.nombres ? `${prog.profesor.nombres} ${prog.profesor.apellidos}` : prog.profesor,
+            especialidades: prog.profesor.especialidades || [],
+            color: prog.profesor.color || "#0455a2",
+            programacionId: prog._id,
+            diasSeleccionados: prog.diasSeleccionados || [],
+            horaInicio: prog.horaInicio,
+            horaFin: prog.horaFin,
+          }))
 
-  // Memoize availability check for performance
-  const availability = useMemo(() => {
-    const grid = {}
-
-    // Crear una estructura para rastrear qué aulas están ocupadas en cada horario
-    const aulasOcupadas = {}
-
-    // Primero, inicializar la estructura
-    horasClase.forEach((hora) => {
-      grid[hora] = {}
-      aulasOcupadas[hora] = {}
-
-      diasSemana.forEach((dia) => {
-        aulasOcupadas[hora][dia] = [] // Usar array en lugar de Set
-      })
-    })
-
-    // Ahora, llenar la información de ocupación basada en la programación
-    programacion.forEach((item) => {
-      const hora = item.hora
-
-      diasSemana.forEach((dia) => {
-        const diaKey = dia.toLowerCase().replace("é", "e").replace("á", "a")
-
-        if (item[diaKey] && item[diaKey].trim() !== "") {
-          // Marcar el aula como ocupada para este día y hora
-          if (item.aula && !aulasOcupadas[hora][dia].includes(item.aula)) {
-            aulasOcupadas[hora][dia].push(item.aula)
-          }
-
-          // Generar la clave para buscar en estudiantesPorClase
-          const claseKey = `${dia}-${hora}-${item[diaKey]}`
-          const estudiantesEnClase = estudiantesPorClase[claseKey] || []
-          const capacidadTotal = capacidadClases[item[diaKey]] || 8 // Default de 8 si no está especificado
-
-          grid[hora][dia] = {
-            isOccupied: true,
-            profesor: item.profesor,
-            aula: item.aula,
-            clase: item[diaKey],
-            estudiantes: estudiantesEnClase,
-            capacidad: capacidadTotal,
-            disponible: estudiantesEnClase.length < capacidadTotal,
-          }
-        } else {
-          grid[hora][dia] = {
-            isOccupied: false,
-            profesor: null,
-            aula: null,
-            clase: null,
-            estudiantes: [],
-            capacidad: 0,
-            disponible: true,
-          }
-        }
-      })
-    })
-
-    // Agregar información sobre qué aulas están ocupadas
-    Object.keys(grid).forEach((hora) => {
-      Object.keys(grid[hora]).forEach((dia) => {
-        grid[hora][dia].aulasOcupadas = aulasOcupadas[hora][dia]
-      })
-    })
-
-    return { grid, aulasOcupadas }
-  }, [programacion, estudiantesPorClase, capacidadClases]) // Recalculate when these dependencies change
-
-  const handleSlotClick = (dia, hora) => {
-    // Verificar que availability.grid y el slot existan
-    if (!availability.grid || !availability.grid[hora] || !availability.grid[hora][dia]) {
-      console.error("Datos de disponibilidad no encontrados para:", dia, hora)
-      return
-    }
-
-    const slotData = availability.grid[hora][dia]
-
-    // Nueva lógica: permitir hacer clic en slot ocupado si tiene disponibilidad
-    if (slotData?.isOccupied && !slotData.disponible) {
-      // Si está ocupado y no tiene disponibilidad, no hacer nada
-      return
-    }
-
-    // Seleccionar el slot
-    setSelectedSlots([{ dia, hora }])
-
-    // Si el slot ya tiene una clase asignada y está disponible, pre-seleccionar esos valores
-    if (slotData?.isOccupied && slotData.disponible) {
-      setSelectedClass(slotData.clase)
-      setSelectedProfesor(slotData.profesor)
-      setSelectedAula(slotData.aula)
-    } else {
-      // Si es un slot vacío, resetear las selecciones
-      setSelectedClass("")
-      setSelectedProfesor("")
-      setSelectedAula("")
-    }
-
-    setNombreEstudiante("")
-  }
-
-  const isSlotSelected = (dia, hora) => {
-    return selectedSlots.some((slot) => slot.dia === dia && slot.hora === hora)
-  }
-
-  // Verificar si un aula está disponible para el slot seleccionado
-  const isAulaAvailable = (aula) => {
-    if (selectedSlots.length === 0) return true
-
-    const { dia, hora } = selectedSlots[0]
-
-    // Verificar que availability.aulasOcupadas y el slot existan
-    if (!availability.aulasOcupadas || !availability.aulasOcupadas[hora] || !availability.aulasOcupadas[hora][dia]) {
-      return true // Si no hay datos, asumimos que está disponible
-    }
-
-    const ocupadas = availability.aulasOcupadas[hora][dia]
-
-    // Si estamos editando una clase existente y es la misma aula, está disponible
-    if (availability.grid && availability.grid[hora] && availability.grid[hora][dia]) {
-      const slotData = availability.grid[hora][dia]
-      if (slotData?.isOccupied && slotData.aula === aula) {
-        return true
+        console.log("Profesores cargados:", profesoresActivos)
+        setProfesores(profesoresActivos)
+      } catch (error) {
+        console.error("Error al cargar profesores:", error)
       }
     }
 
-    // Verificar si el aula está en la lista de ocupadas
-    return !ocupadas.includes(aula)
-  }
+    if (isOpen) {
+      fetchProfesores()
+    }
+  }, [isOpen])
 
-  const getAvailableAulas = () => {
-    // Si no hay aulas definidas, devolver un array vacío
-    if (!aulas || !Array.isArray(aulas)) {
-      console.error("La lista de aulas no está definida o no es un array")
-      return []
+  // Cargar beneficiarios SOLO de ventas tipo "curso"
+  useEffect(() => {
+    const fetchBeneficiarios = async () => {
+      try {
+        const response = await axios.get("http://localhost:3000/api/ventas")
+        const beneficiariosActivos = response.data
+          .filter(
+            (venta) =>
+              venta.estado === "vigente" &&
+              venta.tipo === "curso" && // SOLO ventas tipo curso
+              venta.beneficiarioId,
+          )
+          .map((venta) => ({
+            id: venta._id,
+            nombre: `${venta.beneficiarioId.nombre} ${venta.beneficiarioId.apellido}`,
+            especialidad: venta.cursoId?.nombre || "General",
+            codigoVenta: venta.codigoVenta,
+            tipo: venta.tipo,
+            numeroClases: venta.numero_de_clases,
+            ciclo: venta.ciclo,
+          }))
+
+        console.log("Beneficiarios de cursos cargados:", beneficiariosActivos)
+        setBeneficiarios(beneficiariosActivos)
+      } catch (error) {
+        console.error("Error al cargar beneficiarios:", error)
+      }
     }
 
-    return aulas.filter((a) => isAulaAvailable(a.nombre))
+    if (isOpen) {
+      fetchBeneficiarios()
+    }
+  }, [isOpen])
+
+  // Cargar todas las clases existentes una sola vez
+  useEffect(() => {
+    const fetchClasesExistentes = async () => {
+      if (!isOpen) return
+
+      try {
+        console.log("📚 Cargando clases existentes...")
+        const response = await axios.get("http://localhost:3000/api/programacion_de_clases")
+        console.log("✅ Clases existentes cargadas:", response.data.length)
+        setClasesExistentes(response.data)
+      } catch (error) {
+        console.error("❌ Error al cargar clases existentes:", error)
+        setClasesExistentes([])
+      }
+    }
+
+    fetchClasesExistentes()
+  }, [isOpen])
+
+  // Cargar horarios disponibles del profesor seleccionado
+  useEffect(() => {
+    const fetchHorariosDisponibles = async () => {
+      if (!profesorSeleccionado) {
+        setHorariosDisponibles([])
+        setProgramacionProfesor(null)
+        return
+      }
+
+      setLoadingHorarios(true)
+
+      try {
+        console.log("🔍 Generando horarios para profesor:", profesorSeleccionado)
+
+        // Buscar el profesor seleccionado
+        const profesorData = profesores.find((p) => p.id === profesorSeleccionado)
+        if (!profesorData) {
+          console.warn("⚠️ No se encontró data del profesor")
+          setLoadingHorarios(false)
+          return
+        }
+
+        console.log("👨‍🏫 Datos del profesor encontrado:", profesorData)
+
+        // Crear objeto de programación del profesor
+        const programacionProfesorData = {
+          _id: profesorData.programacionId,
+          profesor: {
+            _id: profesorData.id,
+            nombres: profesorData.nombre.split(" ")[0],
+            apellidos: profesorData.nombre.split(" ").slice(1).join(" "),
+            especialidades: profesorData.especialidades,
+            color: profesorData.color,
+          },
+          horaInicio: profesorData.horaInicio || "08:00",
+          horaFin: profesorData.horaFin || "18:00",
+          diasSeleccionados: profesorData.diasSeleccionados || ["L", "M", "X", "J", "V", "S", "D"],
+        }
+
+        console.log("📋 Programación del profesor:", programacionProfesorData)
+
+        // Generar horarios disponibles usando la función mejorada
+        const horarios = generarHorariosDisponibles(
+          programacionProfesorData.horaInicio,
+          programacionProfesorData.horaFin,
+          programacionProfesorData.diasSeleccionados,
+          profesorSeleccionado,
+        )
+
+        setProgramacionProfesor(programacionProfesorData)
+        setHorariosDisponibles(horarios)
+
+        console.log("✅ Horarios generados exitosamente:", horarios.length)
+      } catch (error) {
+        console.error("❌ Error al procesar horarios:", error)
+        setProgramacionProfesor(null)
+        setHorariosDisponibles([])
+      } finally {
+        setLoadingHorarios(false)
+      }
+    }
+
+    fetchHorariosDisponibles()
+  }, [profesorSeleccionado, profesores, clasesExistentes])
+
+  // Función mejorada para generar horarios disponibles
+  const generarHorariosDisponibles = (horaInicio, horaFin, dias, profesorId) => {
+    console.log("🔧 === INICIO generarHorariosDisponibles ===")
+    console.log("📊 Parámetros:", { horaInicio, horaFin, dias, profesorId })
+    console.log("📚 Total clases existentes:", clasesExistentes.length)
+
+    const horarios = []
+
+    const convertirAMinutos = (hora) => {
+      const [h, m] = hora.split(":").map(Number)
+      return h * 60 + m
+    }
+
+    const convertirAHora = (minutos) => {
+      const h = Math.floor(minutos / 60)
+      const m = minutos % 60
+      return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`
+    }
+
+    const inicioMinutos = convertirAMinutos(horaInicio)
+    const finMinutos = convertirAMinutos(horaFin)
+
+    const diasMap = {
+      L: "Lunes",
+      M: "Martes",
+      X: "Miércoles",
+      J: "Jueves",
+      V: "Viernes",
+      S: "Sábado",
+      D: "Domingo",
+    }
+
+    // Filtrar clases del profesor actual que no estén canceladas
+    const clasesDelProfesor = clasesExistentes.filter((clase) => {
+      // Verificar múltiples formas de identificar al profesor
+      const profesorClase = clase.programacionProfesor?.profesor
+      let esDelProfesor = false
+
+      if (profesorClase) {
+        // Si profesor es un objeto con _id
+        if (typeof profesorClase === "object" && profesorClase._id) {
+          esDelProfesor = String(profesorClase._id) === String(profesorId)
+        }
+        // Si profesor es directamente un string/ObjectId
+        else if (typeof profesorClase === "string") {
+          esDelProfesor = String(profesorClase) === String(profesorId)
+        }
+      }
+
+      // También verificar por programacionProfesor._id
+      if (!esDelProfesor && clase.programacionProfesor?._id) {
+        // Buscar en profesores si la programación corresponde al profesor seleccionado
+        const profesorEncontrado = profesores.find((p) => p.programacionId === String(clase.programacionProfesor._id))
+        esDelProfesor = profesorEncontrado?.id === String(profesorId)
+      }
+
+      const noEsCancelada = clase.estado !== "cancelada"
+
+      return esDelProfesor && noEsCancelada
+    })
+
+    console.log("🎯 Clases del profesor filtradas:", clasesDelProfesor.length)
+
+    // Generar slots de 1 hora para cada día
+    dias.forEach((diaCode) => {
+      const diaNombre = diasMap[diaCode]
+      console.log(`📅 Procesando día: ${diaCode} (${diaNombre})`)
+
+      for (let minutos = inicioMinutos; minutos < finMinutos; minutos += 60) {
+        const horaInicioSlot = convertirAHora(minutos)
+        const horaFinSlot = convertirAHora(minutos + 60)
+
+        if (minutos + 60 <= finMinutos) {
+          // ⚠️ VERIFICAR CON NOMBRES CORRECTOS DE CAMPOS
+          const claseExistente = clasesDelProfesor.find((clase) => {
+            const mismoHorario =
+              clase.dia === diaCode &&
+              (clase.horaInicio === horaInicioSlot || clase.hora_inicio === horaInicioSlot) && // ✅ Verificar ambos formatos
+              (clase.horaFin === horaFinSlot || clase.hora_fin === horaFinSlot) // ✅ Verificar ambos formatos
+            return mismoHorario
+          })
+
+          const estaOcupado = !!claseExistente
+
+          horarios.push({
+            dia: diaCode,
+            diaNombre: diaNombre,
+            horaInicio: horaInicioSlot,
+            horaFin: horaFinSlot,
+            disponible: !estaOcupado,
+            ocupadoPor: estaOcupado ? `Clase: ${claseExistente.especialidad || "Sin especialidad"}` : null,
+            claseId: claseExistente?._id || null,
+          })
+        }
+      }
+    })
+
+    console.log("🎯 === RESUMEN FINAL ===")
+    console.log(`📈 Total horarios generados: ${horarios.length}`)
+    console.log(`✅ Horarios disponibles: ${horarios.filter((h) => h.disponible).length}`)
+    console.log(`❌ Horarios ocupados: ${horarios.filter((h) => !h.disponible).length}`)
+
+    return horarios
   }
 
-  const canSubmit =
-    selectedSlots.length > 0 && selectedClass && selectedProfesor && selectedAula && nombreEstudiante.trim() !== ""
+  // Reset form when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setProfesorSeleccionado("")
+      setProgramacionProfesor(null)
+      setHorariosDisponibles([])
+      setSelectedSlot(null)
+      setBeneficiarioPrincipal(null)
+      setBeneficiariosAdicionales([])
+      setEspecialidadSeleccionada("")
+      setObservaciones("")
+    }
+  }, [isOpen])
 
+  // Organizar horarios en una grilla
+  const { horariosGrid, timeSlots } = useMemo(() => {
+    const grid = {}
+    let slots = defaultTimeSlots
+
+    if (horariosDisponibles.length > 0) {
+      const uniqueSlots = [...new Set(horariosDisponibles.map((h) => `${h.horaInicio}-${h.horaFin}`))].sort()
+      if (uniqueSlots.length > 0) {
+        slots = uniqueSlots
+      }
+    }
+
+    // Inicializar la grilla
+    slots.forEach((slotKey) => {
+      grid[slotKey] = {}
+    })
+
+    // Llenar la grilla con los horarios disponibles
+    horariosDisponibles.forEach((horario) => {
+      const key = `${horario.horaInicio}-${horario.horaFin}`
+      if (!grid[key]) {
+        grid[key] = {}
+      }
+      grid[key][horario.dia] = horario
+    })
+
+    return { horariosGrid: grid, timeSlots: slots }
+  }, [horariosDisponibles])
+
+  const handleSlotClick = (dia, horaInicio, horaFin, disponible) => {
+    if (!disponible) return
+    setSelectedSlot({ dia, horaInicio, horaFin })
+  }
+
+  const isSlotSelected = (dia, horaInicio, horaFin) => {
+    return selectedSlot?.dia === dia && selectedSlot?.horaInicio === horaInicio && selectedSlot?.horaFin === horaFin
+  }
+
+  const handleRemoveBeneficiarioAdicional = (beneficiarioId) => {
+    setBeneficiariosAdicionales(beneficiariosAdicionales.filter((b) => b.id !== beneficiarioId))
+  }
+
+  const canSubmit = selectedSlot && beneficiarioPrincipal && especialidadSeleccionada
+
+  // ✅ FUNCIÓN CORREGIDA - ENVIAR CON NOMBRES CORRECTOS
   const handleSubmit = () => {
     if (!canSubmit) return
 
-    const submissionData = selectedSlots.map((slot) => ({
-      ...slot, // dia, hora
-      clase: selectedClass,
-      profesor: selectedProfesor,
-      aula: selectedAula,
-      estudiante: nombreEstudiante.trim(),
-    }))
-    onSubmit(submissionData) // Pass the array of new schedule entries
+    // ✅ ESTRUCTURA CORREGIDA CON NOMBRES DE CAMPOS CORRECTOS
+    const nuevaClase = {
+      venta: beneficiarioPrincipal.id,
+      programacionProfesor: programacionProfesor._id,
+      dia: diasCodigo[selectedSlot.dia],
+      horaInicio: selectedSlot.horaInicio, // ✅ camelCase para la BD
+      horaFin: selectedSlot.horaFin, // ✅ camelCase para la BD
+      especialidad: especialidadSeleccionada,
+      beneficiariosAdicionales: beneficiariosAdicionales.map((b) => b.id),
+      observaciones: observaciones || null,
+      estado: "programada",
+    }
+
+    console.log("📤 Enviando nueva clase con campos corregidos:", nuevaClase)
+    onSubmit(nuevaClase)
     onClose()
   }
 
-  // Calcular el número de días a mostrar basado en el tamaño de la pantalla
-  const visibleDays = isMobile ? 3 : diasSemana.length
+  // Filtrar beneficiarios por especialidad seleccionada
+  const beneficiariosFiltrados = useMemo(() => {
+    if (!especialidadSeleccionada) return beneficiarios
+    return beneficiarios.filter(
+      (b) =>
+        b.especialidad.toLowerCase().includes(especialidadSeleccionada.toLowerCase()) || b.especialidad === "General",
+    )
+  }, [beneficiarios, especialidadSeleccionada])
 
   return (
     <Dialog
       open={isOpen}
       onClose={onClose}
       fullWidth
-      maxWidth="lg"
+      maxWidth="xl"
       PaperProps={{
         sx: {
-          maxHeight: "90vh",
+          height: "95vh",
           display: "flex",
           flexDirection: "column",
           borderRadius: "12px",
-          overflow: "hidden", // Evita el scroll en el Dialog principal
+          overflow: "hidden",
+          mt: 3,
         },
       }}
     >
@@ -292,406 +477,546 @@ export const ClassSchedulerModal = ({
           justifyContent: "space-between",
           alignItems: "center",
           p: 2,
-          flexShrink: 0, // Evita que el título se encoja
+          flexShrink: 0,
         }}
       >
-        Programar Nueva Clase
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <ScheduleIcon />
+          Programar nueva clase
+        </Box>
         <IconButton onClick={onClose} sx={{ color: "white" }}>
           <CloseIcon />
         </IconButton>
       </DialogTitle>
+
       <DialogContent
         sx={{
           p: 3,
-          flexGrow: 1,
-          overflow: "hidden", // Evitamos el scroll en el DialogContent
+          pt: 3,
+          pb: 0,
+          flex: 1,
+          overflow: "hidden",
           display: "flex",
           flexDirection: "column",
-          ...scrollbarStyles, // Aplicamos los estilos de scroll personalizados
+          minHeight: 0,
+          mt: 3,
+          maxHeight: "calc(95vh - 120px)",
         }}
       >
-        <Grid container spacing={3} sx={{ flexGrow: 1, height: "100%" }}>
-          {/* Calendar Grid */}
-          <Grid item xs={12} md={8} sx={{ height: isMobile ? "auto" : "100%" }}>
-            <Typography variant="h6" gutterBottom>
-              Seleccionar Horario Disponible
-            </Typography>
+        <Grid container spacing={3} sx={{ flex: 1, minHeight: 0 }}>
+          {/* Selección de profesor y horarios */}
+          <Grid item xs={12} lg={8} sx={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <Box sx={{ mb: 2, display: "flex", alignItems: "center", gap: 2 }}>
+              <FormControl fullWidth>
+                <InputLabel>Seleccionar Profesor</InputLabel>
+                <Select
+                  value={profesorSeleccionado}
+                  onChange={(e) => setProfesorSeleccionado(e.target.value)}
+                  label="Seleccionar Profesor"
+                >
+                  {profesores.map((profesor) => (
+                    <MenuItem key={profesor.id} value={profesor.id}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Box
+                          sx={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: "50%",
+                            bgcolor: profesor.color,
+                          }}
+                        />
+                        <PersonIcon sx={{ color: profesor.color, fontSize: 18 }} />
+                        <span>{profesor.nombre}</span>
+                        <Chip
+                          label={profesor.especialidades.join(", ")}
+                          size="small"
+                          sx={{ ml: 1, bgcolor: alpha(profesor.color, 0.1), color: profesor.color }}
+                        />
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              {programacionProfesor && (
+                <Chip
+                  label={`${programacionProfesor.horaInicio} - ${programacionProfesor.horaFin}`}
+                  color="primary"
+                  variant="outlined"
+                />
+              )}
+            </Box>
+
+            {/* Grilla de horarios */}
             <Paper
               elevation={1}
               sx={{
-                height: isMobile ? "auto" : "calc(100% - 40px)",
+                flex: 1,
+                minHeight: 0,
                 display: "flex",
                 flexDirection: "column",
                 border: "1px solid #e0e0e0",
                 borderRadius: "8px",
-                overflow: "hidden", // Oculta el desbordamiento
+                overflow: "hidden",
+                position: "relative",
               }}
             >
+              {loadingHorarios && (
+                <Box
+                  sx={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    bgcolor: "rgba(255, 255, 255, 0.9)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 4,
+                    backdropFilter: "blur(3px)",
+                  }}
+                >
+                  <Box sx={{ textAlign: "center" }}>
+                    <CircularProgress size={50} sx={{ mb: 2, color: "#0455a2" }} />
+                    <Typography variant="body1" color="text.secondary" sx={{ fontWeight: 500 }}>
+                      Cargando horarios disponibles...
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+
               <Box
                 sx={{
+                  flex: 1,
+                  minHeight: 0,
                   overflow: "auto",
-                  flexGrow: 1,
-                  ...scrollbarStyles, // Aplicamos los estilos de scroll personalizados
-                  // Usamos position: relative para que los elementos fixed funcionen correctamente
-                  position: "relative",
+                  maxHeight: "550px",
+                  ...scrollbarStyles,
                 }}
               >
                 <Box
                   sx={{
                     display: "grid",
-                    gridTemplateColumns: `100px repeat(${visibleDays}, 1fr)`,
-                    minWidth: isMobile ? "600px" : "auto", // Asegura un ancho mínimo en móviles
+                    gridTemplateColumns: `140px repeat(7, minmax(120px, 1fr))`,
+                    minWidth: "1000px",
+                    minHeight: `${timeSlots.length * 70 + 60}px`,
                   }}
                 >
                   {/* Header Row */}
                   <Box
                     sx={{
-                      p: 1,
-                      borderRight: "1px solid #e0e0e0",
-                      borderBottom: "1px solid #e0e0e0",
+                      p: 1.5,
+                      borderRight: "2px solid #0455a2",
+                      borderBottom: "3px solid #0455a2",
                       fontWeight: "bold",
                       textAlign: "center",
-                      bgcolor: "#f5f5f5",
+                      bgcolor: "#0455a2",
+                      color: "white",
                       position: "sticky",
                       top: 0,
-                      left: 0, // Esto es lo que hace que se quede fijo en la esquina
-                      zIndex: 3, // Nivel más alto para estar por encima de todo
+                      left: 0,
+                      zIndex: 3,
+                      boxShadow: "2px 2px 4px rgba(0,0,0,0.1)",
                     }}
                   >
-                    Hora
+                    <ScheduleIcon sx={{ mb: 0.5, fontSize: 20 }} />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
+                      Horario
+                    </Typography>
                   </Box>
-                  {diasSemana.slice(0, visibleDays).map((dia) => (
+                  {diasSemana.map((dia) => (
                     <Box
                       key={dia}
                       sx={{
-                        p: 1,
+                        p: 1.5,
                         borderRight: "1px solid #e0e0e0",
-                        borderBottom: "1px solid #e0e0e0",
+                        borderBottom: "3px solid #0455a2",
                         fontWeight: "bold",
                         textAlign: "center",
-                        bgcolor: "#f5f5f5",
+                        bgcolor: "#f8f9fa",
                         position: "sticky",
                         top: 0,
-                        zIndex: 2, // Por encima de las celdas pero por debajo de la esquina
+                        zIndex: 2,
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
                       }}
                     >
-                      {dia}
+                      <Typography
+                        variant="subtitle2"
+                        sx={{
+                          fontWeight: 700,
+                          color: "#0455a2",
+                          fontSize: "0.8rem",
+                        }}
+                      >
+                        {dia}
+                      </Typography>
                     </Box>
                   ))}
 
                   {/* Data Rows */}
-                  {horasClase.map((hora) => (
-                    <React.Fragment key={hora}>
-                      <Box
-                        sx={{
-                          p: 1,
-                          borderRight: "1px solid #e0e0e0",
-                          borderBottom: "1px solid #e0e0e0",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          bgcolor: "#f9f9f9",
-                          position: "sticky",
-                          left: 0, // Esto es lo que hace que se quede fijo en el lado izquierdo
-                          zIndex: 1, // Por encima del contenido normal
-                        }}
-                      >
-                        <Typography variant="body2">{hora}</Typography>
-                      </Box>
-                      {diasSemana.slice(0, visibleDays).map((dia) => {
-                        const slotData = availability.grid[hora]?.[dia]
-                        const occupied = slotData?.isOccupied
-                        const selected = isSlotSelected(dia, hora)
-                        const color = occupied ? getClassColor(slotData.clase) : "#ffffff"
-                        const disponible = !occupied || slotData.disponible
-
-                        // Info para mostrar en el tooltip
-                        const tooltipContent = disponible
-                          ? occupied
-                            ? `${slotData.clase} (${slotData.estudiantes.length}/${slotData.capacidad} estudiantes)`
-                            : "Disponible"
-                          : `${slotData.clase} (Capacidad máxima: ${slotData.capacidad} estudiantes)`
-
-                        return (
-                          <Tooltip key={`${hora}-${dia}`} title={tooltipContent} placement="top" arrow>
-                            <Box
-                              onClick={() => disponible && handleSlotClick(dia, hora)}
-                              onMouseEnter={() => setHoveredSlot({ dia, hora })}
-                              onMouseLeave={() => setHoveredSlot(null)}
-                              sx={{
-                                p: 1,
-                                minHeight: 50, // Reducimos un poco la altura para que quepa mejor
-                                borderRight: "1px solid #e0e0e0",
-                                borderBottom: "1px solid #e0e0e0",
-                                cursor: disponible ? "pointer" : "not-allowed",
-                                bgcolor: selected
-                                  ? alpha("#1976d2", 0.3)
-                                  : occupied && !disponible
-                                    ? alpha(color, 0.1)
-                                    : occupied && disponible
-                                      ? alpha(color, 0.15)
-                                      : "#ffffff",
-                                "&:hover": {
-                                  bgcolor: disponible
-                                    ? occupied
-                                      ? alpha(color, 0.25)
-                                      : alpha("#1976d2", 0.1)
-                                    : alpha(color, 0.1),
-                                },
-                                position: "relative",
-                                display: "flex",
-                                flexDirection: "column",
-                                justifyContent: "center",
-                                alignItems: "center",
-                                textAlign: "center",
-                                transition: "background-color 0.2s ease",
-                                opacity: disponible ? 1 : 0.7, // Reducir la opacidad para slots no disponibles
-                              }}
+                  {timeSlots.map((horarioKey, index) => {
+                    const [horaInicio, horaFin] = horarioKey.split("-")
+                    const isEvenRow = index % 2 === 0
+                    return (
+                      <React.Fragment key={horarioKey}>
+                        {/* Columna de hora */}
+                        <Box
+                          sx={{
+                            p: 1.5,
+                            borderRight: "2px solid #0455a2",
+                            borderBottom: "1px solid #e0e0e0",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            bgcolor: isEvenRow ? "#f8f9fa" : "#ffffff",
+                            position: "sticky",
+                            left: 0,
+                            zIndex: 1,
+                            boxShadow: "1px 0 3px rgba(0,0,0,0.05)",
+                            minHeight: 70,
+                          }}
+                        >
+                          <Box sx={{ textAlign: "center" }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: "#0455a2", fontSize: "0.8rem" }}>
+                              {horaInicio}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ fontWeight: 500, fontSize: "0.7rem" }}
                             >
-                              {occupied && (
-                                <Chip
-                                  label={slotData.clase}
-                                  size="small"
-                                  sx={{
-                                    bgcolor: alpha(color, disponible ? 0.7 : 0.4),
-                                    color: "#fff",
-                                    fontSize: "0.7rem",
-                                    mb: 0.5,
-                                    textDecoration: disponible ? "none" : "line-through",
-                                  }}
-                                />
-                              )}
-                              {occupied && (
+                              {horaFin}
+                            </Typography>
+                          </Box>
+                        </Box>
+
+                        {/* Celdas de días */}
+                        {diasSemana.map((dia) => {
+                          const horario = horariosGrid[horarioKey]?.[diasCodigo[dia]]
+                          const disponible = horario?.disponible || false
+                          const selected = disponible && isSlotSelected(dia, horaInicio, horaFin)
+
+                          let cellContent
+                          const cellSx = {
+                            p: 1,
+                            minHeight: 70,
+                            borderRight: "1px solid #e0e0e0",
+                            borderBottom: "1px solid #e0e0e0",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            textAlign: "center",
+                            transition: "all 0.2s ease",
+                            position: "relative",
+                            cursor: "pointer",
+                          }
+
+                          if (!profesorSeleccionado) {
+                            cellContent = <Skeleton variant="rectangular" width="90%" height={40} />
+                            cellSx.bgcolor = isEvenRow ? "#fafbfc" : "#ffffff"
+                            cellSx.cursor = "not-allowed"
+                          } else if (horario) {
+                            cellContent = (
+                              <Box sx={{ textAlign: "center", width: "100%" }}>
                                 <Typography
                                   variant="caption"
-                                  display="block"
-                                  sx={{ fontSize: "0.65rem", color: "text.secondary" }}
-                                >
-                                  {slotData.estudiantes.length}/{slotData.capacidad} estudiantes
-                                </Typography>
-                              )}
-                              {!occupied && selected && (
-                                <Typography variant="caption" sx={{ color: "#1976d2", fontWeight: "bold" }}>
-                                  Seleccionado
-                                </Typography>
-                              )}
-                              {!occupied && !selected && (
-                                <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                                  Disponible
-                                </Typography>
-                              )}
-
-                              {/* Indicador de si está lleno o disponible */}
-                              {occupied && (
-                                <Box
                                   sx={{
-                                    position: "absolute",
-                                    top: 2,
-                                    right: 2,
-                                    width: 8,
-                                    height: 8,
-                                    borderRadius: "50%",
-                                    bgcolor: disponible ? "#4caf50" : "#f44336",
+                                    color: selected ? "#1976d2" : disponible ? "#4caf50" : "#f44336",
+                                    fontWeight: "bold",
+                                    display: "block",
+                                    mb: 0.5,
+                                    fontSize: "0.7rem",
                                   }}
-                                />
-                              )}
-                            </Box>
-                          </Tooltip>
-                        )
-                      })}
-                    </React.Fragment>
-                  ))}
-                </Box>
-              </Box>
+                                >
+                                  {selected ? "✓ Seleccionado" : disponible ? "✓ Disponible" : "✗ Ocupado"}
+                                </Typography>
+                                {!disponible && (
+                                  <Typography variant="caption" sx={{ color: "#f44336", fontSize: "0.6rem" }}>
+                                    {horario.ocupadoPor}
+                                  </Typography>
+                                )}
+                              </Box>
+                            )
+                            cellSx.cursor = disponible ? "pointer" : "not-allowed"
+                            cellSx.bgcolor = selected
+                              ? alpha("#1976d2", 0.2)
+                              : disponible
+                                ? alpha("#4caf50", 0.1)
+                                : alpha("#f44336", 0.1)
+                            cellSx["&:hover"] = {
+                              bgcolor: disponible
+                                ? selected
+                                  ? alpha("#1976d2", 0.3)
+                                  : alpha("#4caf50", 0.2)
+                                : alpha("#f44336", 0.15),
+                              transform: disponible ? "scale(1.02)" : "none",
+                            }
+                            if (selected) {
+                              cellSx.border = "2px solid #1976d2"
+                            }
+                          } else {
+                            cellContent = (
+                              <Typography variant="caption" sx={{ color: "text.disabled", fontSize: "0.7rem" }}>
+                                No programado
+                              </Typography>
+                            )
+                            cellSx.bgcolor = isEvenRow ? alpha("#bdbdbd", 0.05) : alpha("#bdbdbd", 0.02)
+                            cellSx.cursor = "not-allowed"
+                          }
 
-              {/* Leyenda explicativa */}
-              <Box
-                sx={{
-                  p: 1,
-                  borderTop: "1px solid #e0e0e0",
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 2,
-                  justifyContent: "center",
-                }}
-              >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                  <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "#4caf50" }} />
-                  <Typography variant="caption">Con disponibilidad</Typography>
-                </Box>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                  <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "#f44336" }} />
-                  <Typography variant="caption">Sin disponibilidad</Typography>
+                          return (
+                            <Box
+                              key={`${horarioKey}-${dia}`}
+                              onClick={() =>
+                                profesorSeleccionado &&
+                                horario &&
+                                disponible &&
+                                handleSlotClick(dia, horaInicio, horaFin, disponible)
+                              }
+                              sx={cellSx}
+                            >
+                              {cellContent}
+                            </Box>
+                          )
+                        })}
+                      </React.Fragment>
+                    )
+                  })}
                 </Box>
               </Box>
             </Paper>
           </Grid>
 
-          {/* Selection Details */}
-          <Grid item xs={12} md={4} sx={{ height: isMobile ? "auto" : "100%" }}>
-            <Typography variant="h6" gutterBottom>
-              Detalles de la Clase
+          {/* Panel de detalles */}
+          <Grid item xs={12} lg={4} sx={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <InfoIcon color="primary" />
+              Detalles de la clase
             </Typography>
-            {selectedSlots.length > 0 ? (
-              <Paper
+
+            {selectedSlot ? (
+              <Card
                 elevation={1}
                 sx={{
-                  p: 2,
-                  border: "1px solid #e0e0e0",
-                  borderRadius: "8px",
-                  height: isMobile ? "auto" : "calc(100% - 40px)",
+                  flex: 1,
                   display: "flex",
                   flexDirection: "column",
-                  overflow: "auto",
-                  ...scrollbarStyles, // Aplicamos los estilos de scroll personalizados
+                  overflow: "hidden",
+                  minHeight: 0,
+                  maxHeight: "calc(95vh - 200px)",
                 }}
               >
-                <Typography variant="subtitle1" gutterBottom>
-                  Horario Seleccionado: {selectedSlots[0].dia} {selectedSlots[0].hora}
-                </Typography>
-
-                <FormControl fullWidth margin="normal" required>
-                  <InputLabel id="clase-label">Clase</InputLabel>
-                  <Select
-                    labelId="clase-label"
-                    value={selectedClass}
-                    label="Clase"
-                    onChange={(e) => setSelectedClass(e.target.value)}
-                    MenuProps={{
-                      PaperProps: {
-                        sx: scrollbarStyles, // Aplicamos los estilos de scroll al menú
-                      },
-                    }}
-                  >
-                    {clasesDisponibles.map((clase) => (
-                      <MenuItem key={clase} value={clase}>
-                        {clase}
-                        {capacidadClases[clase] ? ` (max. ${capacidadClases[clase]} estudiantes)` : ""}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-
-                <FormControl fullWidth margin="normal" required>
-                  <InputLabel id="profesor-label">Profesor</InputLabel>
-                  <Select
-                    labelId="profesor-label"
-                    value={selectedProfesor}
-                    label="Profesor"
-                    onChange={(e) => setSelectedProfesor(e.target.value)}
-                    MenuProps={{
-                      PaperProps: {
-                        sx: scrollbarStyles, // Aplicamos los estilos de scroll al menú
-                      },
-                    }}
-                  >
-                    {/* Filter available professors later if needed */}
-                    {profesores.map((p) => (
-                      <MenuItem key={p.id || p.nombre} value={p.nombre + " " + p.apellidos}>
-                        {p.nombre} {p.apellidos}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-
-                <FormControl fullWidth margin="normal" required>
-                  <InputLabel id="aula-label">Aula</InputLabel>
-                  <Select
-                    labelId="aula-label"
-                    value={selectedAula}
-                    label="Aula"
-                    onChange={(e) => setSelectedAula(e.target.value)}
-                    MenuProps={{
-                      PaperProps: {
-                        sx: scrollbarStyles, // Aplicamos los estilos de scroll al menú
-                      },
-                    }}
-                  >
-                    {/* Solo mostrar aulas disponibles */}
-                    {getAvailableAulas().map((a) => (
-                      <MenuItem key={a.id || a.nombre} value={a.nombre}>
-                        {a.nombre}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  {getAvailableAulas().length < aulas.length && (
-                    <FormHelperText>Algunas aulas no están disponibles en este horario</FormHelperText>
-                  )}
-                </FormControl>
-
-                <FormControl fullWidth margin="normal" required>
-                  <InputLabel id="estudiante-label">Estudiante</InputLabel>
-                  <Select
-                    labelId="estudiante-label"
-                    value={nombreEstudiante}
-                    label="Estudiante"
-                    onChange={(e) => setNombreEstudiante(e.target.value)}
-                    MenuProps={{
-                      PaperProps: {
-                        sx: scrollbarStyles, // Aplicamos los estilos de scroll personalizados
-                      },
-                    }}
-                  >
-                    {Object.values(estudiantesPorClase).flat().map((estudiante, index) => (
-                      <MenuItem key={index} value={estudiante}>
-                        {estudiante}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  <FormHelperText>Seleccione el estudiante</FormHelperText>
-                </FormControl>
-
-                {/* Mostrar información de capacidad si se ha seleccionado una clase */}
-                {selectedClass && (
-                  <Box sx={{ mt: 2, display: "flex", alignItems: "center", gap: 1 }}>
-                    <InfoIcon fontSize="small" color="info" />
-                    <Typography variant="caption">
-                      Capacidad: {capacidadClases[selectedClass] || 8} estudiantes
+                <CardContent
+                  sx={{
+                    flex: 1,
+                    overflow: "auto",
+                    ...scrollbarStyles,
+                    p: 2,
+                  }}
+                >
+                  {/* Horario seleccionado */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600 }}>
+                      📅 Horario seleccionado
                     </Typography>
+                    <Chip
+                      label={`${selectedSlot.dia} ${selectedSlot.horaInicio} - ${selectedSlot.horaFin}`}
+                      color="primary"
+                      sx={{ fontWeight: 500 }}
+                    />
                   </Box>
-                )}
 
-                {/* Mostrar estudiantes actuales si estamos añadiendo a una clase existente */}
-                {selectedSlots.length > 0 &&
-                  selectedClass &&
-                  (() => {
-                    const { dia, hora } = selectedSlots[0]
-                    const slotData = availability.grid[hora]?.[dia]
-                    if (slotData?.isOccupied && slotData.clase === selectedClass && slotData.estudiantes.length > 0) {
-                      return (
-                        <Box sx={{ mt: 2 }}>
-                          <Typography variant="caption" sx={{ fontWeight: "bold" }}>
-                            Estudiantes actuales:
-                          </Typography>
-                          <Box component="ul" sx={{ mt: 0.5, pl: 2, fontSize: "0.75rem" }}>
-                            {slotData.estudiantes.map((est, idx) => (
-                              <Box component="li" key={idx}>
-                                {est}
-                              </Box>
-                            ))}
+                  <Divider sx={{ my: 2 }} />
+
+                  {/* Selección de especialidad */}
+                  <FormControl fullWidth margin="normal" required>
+                    <InputLabel>Especialidad</InputLabel>
+                    <Select
+                      value={especialidadSeleccionada}
+                      onChange={(e) => setEspecialidadSeleccionada(e.target.value)}
+                      label="Especialidad"
+                    >
+                      {programacionProfesor?.profesor.especialidades.map((esp) => (
+                        <MenuItem key={esp} value={esp}>
+                          {esp}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  <Divider sx={{ my: 2 }} />
+
+                  {/* Selección de beneficiario principal */}
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+                      👤 Beneficiario Principal (Solo Cursos)
+                    </Typography>
+                    <Autocomplete
+                      options={beneficiariosFiltrados}
+                      value={beneficiarioPrincipal}
+                      onChange={(event, newValue) => setBeneficiarioPrincipal(newValue)}
+                      getOptionLabel={(option) => `${option.nombre} (${option.codigoVenta})`}
+                      renderInput={(params) => (
+                        <TextField {...params} label="Buscar beneficiario" size="small" fullWidth />
+                      )}
+                      disabled={!especialidadSeleccionada}
+                      renderOption={(props, option) => (
+                        <Box component="li" {...props}>
+                          <PersonIcon sx={{ mr: 1, fontSize: 18 }} />
+                          <Box>
+                            <Typography variant="body2">{option.nombre}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {option.codigoVenta} - {option.tipo} - {option.numeroClases} clases
+                            </Typography>
                           </Box>
                         </Box>
-                      )
-                    }
-                    return null
-                  })()}
-              </Paper>
+                      )}
+                    />
+                  </Box>
+
+                  {/* Beneficiarios adicionales */}
+                  <Box sx={{ mb: 2 }}>
+                    <Typography
+                      variant="subtitle2"
+                      gutterBottom
+                      sx={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 1 }}
+                    >
+                      <GroupIcon fontSize="small" />
+                      Beneficiarios Adicionales (Opcional)
+                    </Typography>
+
+                    <Box sx={{ display: "flex", gap: 1, alignItems: "center", mb: 2 }}>
+                      <Autocomplete
+                        options={beneficiariosFiltrados.filter(
+                          (ben) =>
+                            ben.id !== beneficiarioPrincipal?.id &&
+                            !beneficiariosAdicionales.find((b) => b.id === ben.id),
+                        )}
+                        value={null}
+                        onChange={(event, newValue) => {
+                          if (newValue) {
+                            setBeneficiariosAdicionales([...beneficiariosAdicionales, newValue])
+                          }
+                        }}
+                        getOptionLabel={(option) => option.nombre}
+                        renderInput={(params) => <TextField {...params} label="Añadir beneficiario" size="small" />}
+                        sx={{ flex: 1 }}
+                        disabled={!especialidadSeleccionada || !beneficiarioPrincipal}
+                      />
+                    </Box>
+
+                    {/* Lista de beneficiarios adicionales */}
+                    {beneficiariosAdicionales.length > 0 && (
+                      <Box sx={{ mt: 2 }}>
+                        <Typography variant="caption" sx={{ fontWeight: "bold", mb: 1, display: "block" }}>
+                          Beneficiarios adicionales añadidos:
+                        </Typography>
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                          {beneficiariosAdicionales.map((beneficiario) => (
+                            <Chip
+                              key={beneficiario.id}
+                              label={beneficiario.nombre}
+                              onDelete={() => handleRemoveBeneficiarioAdicional(beneficiario.id)}
+                              color="secondary"
+                              sx={{ justifyContent: "space-between" }}
+                              deleteIcon={<RemoveIcon />}
+                            />
+                          ))}
+                        </Box>
+                      </Box>
+                    )}
+                  </Box>
+
+                  <Divider sx={{ my: 2 }} />
+
+                  {/* Observaciones */}
+                  <TextField
+                    label="Observaciones (Opcional)"
+                    multiline
+                    rows={3}
+                    fullWidth
+                    value={observaciones}
+                    onChange={(e) => setObservaciones(e.target.value)}
+                    sx={{ mb: 2 }}
+                  />
+
+                  {/* Info del profesor */}
+                  {programacionProfesor && (
+                    <Box sx={{ mt: 2, p: 2, bgcolor: alpha("#0455a2", 0.05), borderRadius: 1 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                        <InfoIcon fontSize="small" color="info" />
+                        <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                          Información del profesor
+                        </Typography>
+                      </Box>
+                      <Typography variant="caption" display="block">
+                        👨‍🏫 {programacionProfesor.profesor.nombres} {programacionProfesor.profesor.apellidos}
+                      </Typography>
+                      <Typography variant="caption" display="block">
+                        🎯 Especialidades: {programacionProfesor.profesor.especialidades.join(", ")}
+                      </Typography>
+                      <Typography variant="caption" display="block">
+                        📅 Días disponibles:{" "}
+                        {programacionProfesor.diasSeleccionados
+                          .map((d) =>
+                            d === "L"
+                              ? "Lun"
+                              : d === "M"
+                                ? "Mar"
+                                : d === "X"
+                                  ? "Mié"
+                                  : d === "J"
+                                    ? "Jue"
+                                    : d === "V"
+                                      ? "Vie"
+                                      : d === "S"
+                                        ? "Sáb"
+                                        : "Dom",
+                          )
+                          .join(", ")}
+                      </Typography>
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
             ) : (
-              <Typography sx={{ color: "text.secondary", mt: 2 }}>
-                Seleccione un horario disponible en la cuadrícula.
-              </Typography>
+              <Card sx={{ mt: 2 }}>
+                <CardContent sx={{ textAlign: "center", py: 4 }}>
+                  <ScheduleIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }} />
+                  <Typography variant="body1" color="text.secondary" gutterBottom>
+                    {profesorSeleccionado
+                      ? "Seleccione un horario disponible en la cuadrícula"
+                      : "Seleccione un profesor para ver los horarios disponibles"}
+                  </Typography>
+                  {profesorSeleccionado && (
+                    <Typography variant="caption" color="text.secondary">
+                      Nota: Solo se muestran beneficiarios de ventas tipo "curso"
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
             )}
           </Grid>
         </Grid>
       </DialogContent>
+
       <DialogActions
         sx={{
-          p: 2,
+          p: 3,
           borderTop: "1px solid #e0e0e0",
-          flexShrink: 0, // Evita que las acciones se encojan
+          flexShrink: 0,
+          gap: 2,
         }}
       >
-        <Button onClick={onClose} color="secondary">
+        <Button
+          onClick={onClose}
+          color="secondary"
+          sx={{
+            textTransform: "none",
+            px: 3,
+            py: 1,
+          }}
+        >
           Cancelar
         </Button>
         <Button
@@ -703,9 +1028,13 @@ export const ClassSchedulerModal = ({
             "&:hover": {
               bgcolor: "#034589",
             },
+            textTransform: "none",
+            px: 3,
+            py: 1,
+            fontWeight: 600,
           }}
         >
-          Guardar Programación
+          Programar Clase
         </Button>
       </DialogActions>
     </Dialog>

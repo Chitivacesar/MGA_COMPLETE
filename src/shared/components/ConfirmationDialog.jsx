@@ -2,7 +2,16 @@
 import { Dialog, DialogActions, Button, Typography, Box, IconButton } from "@mui/material"
 import { Close as CloseIcon } from "@mui/icons-material"
 
-export const ConfirmationDialog = ({ open, onClose, onConfirm, title, content }) => {
+export const ConfirmationDialog = ({
+  open,
+  onClose,
+  onConfirm,
+  title,
+  content,
+  confirmButtonText = "Confirmar",
+  confirmButtonColor = "#f44336", // Rojo por defecto para acciones destructivas
+  cancelButtonText = "Cancelar",
+}) => {
   return (
     <Dialog
       open={open}
@@ -52,27 +61,26 @@ export const ConfirmationDialog = ({ open, onClose, onConfirm, title, content })
             borderColor: "rgba(0, 0, 0, 0.12)",
           }}
         >
-          Cancelar
+          {cancelButtonText}
         </Button>
         <Button
           onClick={onConfirm}
           variant="contained"
           disableElevation
           sx={{
-            backgroundColor: "#4f46e5",
+            backgroundColor: confirmButtonColor,
             borderRadius: "8px",
             textTransform: "none",
             fontWeight: 500,
             px: 3,
             "&:hover": {
-              backgroundColor: "#4338ca",
+              backgroundColor: confirmButtonColor === "#f44336" ? "#d32f2f" : "#4338ca",
             },
           }}
         >
-          Confirmar
+          {confirmButtonText}
         </Button>
       </DialogActions>
     </Dialog>
   )
 }
-

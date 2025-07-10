@@ -1,12 +1,18 @@
-const express = require('express');
-const router = express.Router();
-const programacionClaseController = require('../controllers/programacionClaseController');
+const express = require("express")
+const router = express.Router()
 
-// Rutas de programación de clases
-router.get('/', programacionClaseController.getProgramaciones);
-router.get('/:id', programacionClaseController.getProgramacionById);
-router.post('/', programacionClaseController.createProgramacion);
-router.put('/:id', programacionClaseController.updateProgramacion);
-router.delete('/:id', programacionClaseController.deleteProgramacion);
+// ✅ IMPORTAR CORRECTAMENTE LAS FUNCIONES
+const {
+  createProgramacion,
+  getProgramaciones,
+  updateProgramacion,
+  deleteProgramacion,
+} = require("../controllers/programacionClaseController")
 
-module.exports = router;
+// ✅ RUTAS CON FUNCIONES CORRECTAS
+router.post("/", createProgramacion)
+router.get("/", getProgramaciones)
+router.put("/:id", updateProgramacion)
+router.delete("/:id", deleteProgramacion)
+
+module.exports = router

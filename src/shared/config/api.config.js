@@ -6,6 +6,6 @@ export const API_CONFIG = {
   ENDPOINTS: {
     USUARIOS: '/usuarios',
     ROLES: '/roles',
-    USUARIOS_HAS_ROL: '/usuarios_has_rol'  // Corregido para coincidir con la ruta del backend
-  }
+    USUARIOS_HAS_ROL: '/usuarios_has_rol'  // Corregido para coincidir con la ruta del backend
+  }
 };

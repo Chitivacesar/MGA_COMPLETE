@@ -1,5 +1,3 @@
-
-
 const UsuarioHasRol = require('../models/UsuarioHasRol');
 
 // GET - Obtener todas las relaciones usuario-rol
@@ -30,38 +28,34 @@ exports.getUsuarioHasRolById = async (req, res) => {
   }
 };
 
+// GET - Obtener roles por ID de usuario
+exports.getUsuarioHasRolesByUsuarioId = async (req, res) => {
+  try {
+    const relaciones = await UsuarioHasRol.find({ usuarioId: req.params.usuarioId })
+      .populate('usuarioId')
+      .populate('rolId');
+    res.json(relaciones);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // POST - Crear nueva relación usuario-rol
 exports.createUsuarioHasRol = async (req, res) => {
+  const nuevaRelacion = new UsuarioHasRol({
+    usuarioId: req.body.usuarioId,
+    rolId: req.body.rolId
+  });
+
   try {
-    // Verificar si ya existe la relación
-    const existeRelacion = await UsuarioHasRol.findOne({
-      usuarioId: req.body.usuarioId,
-      rolId: req.body.rolId
-    });
-
-    if (existeRelacion) {
-      return res.status(409).json({ 
-        message: 'El usuario ya tiene asignado este rol',
-        code: 'DUPLICATE_ROLE_ASSIGNMENT'
-      });
-    }
-
-    const nuevaRelacion = new UsuarioHasRol({
-      usuarioId: req.body.usuarioId,
-      rolId: req.body.rolId
-    });
-
-    const guardado = await nuevaRelacion.save();
-    res.status(201).json(guardado);
+    await nuevaRelacion.save();
+    // Devolver todas las relaciones de ese usuario (array)
+    const relaciones = await UsuarioHasRol.find({ usuarioId: req.body.usuarioId })
+      .populate('usuarioId')
+      .populate('rolId');
+    res.status(201).json(relaciones);s
   } catch (error) {
-    if (error.code === 11000) {
-      res.status(409).json({ 
-        message: 'El usuario ya tiene asignado este rol',
-        code: 'DUPLICATE_ROLE_ASSIGNMENT'
-      });
-    } else {
-      res.status(400).json({ message: error.message });
-    }
+    res.status(400).json({ message: error.message });
   }
 };
 
@@ -78,18 +72,6 @@ exports.updateUsuarioHasRol = async (req, res) => {
     }
   } catch (error) {
     res.status(400).json({ message: error.message });
-  }
-};
-
-// GET - Obtener relaciones por usuario ID
-exports.getUsuarioHasRolesByUsuarioId = async (req, res) => {
-  try {
-    const relaciones = await UsuarioHasRol.find({ usuarioId: req.params.usuarioId })
-      .populate('usuarioId')
-      .populate('rolId');
-    res.json(relaciones);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
   }
 };
 
@@ -111,8 +93,12 @@ exports.deleteUsuarioHasRol = async (req, res) => {
 // DELETE - Eliminar todas las relaciones de un usuario
 exports.deleteUsuarioHasRolesByUsuarioId = async (req, res) => {
   try {
-    const result = await UsuarioHasRol.deleteMany({ usuarioId: req.params.usuarioId });
-    res.json({ message: `${result.deletedCount} relaciones eliminadas` });
+    const resultado = await UsuarioHasRol.deleteMany({ usuarioId: req.params.usuarioId });
+    if (resultado.deletedCount > 0) {
+      res.json({ message: `Se eliminaron ${resultado.deletedCount} relaciones del usuario` });
+    } else {
+      res.status(404).json({ message: 'No se encontraron relaciones para este usuario' });
+    }
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

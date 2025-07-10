@@ -3,22 +3,24 @@ const Pago = require('../models/Pago');
 const pagoController = {
   async getPagos(req, res) {
     try {
-      // REVERTIR: Populate simple como antes
       const pagos = await Pago.find()
         .populate({
           path: 'ventas',
           populate: {
             path: 'beneficiarioId',
-            model: 'Beneficiario'
+            populate: {
+              path: 'clienteId',
+              model: 'Cliente'
+            }
           }
         })
         .sort({ createdAt: -1 });
 
-      // REVERTIR: Formateo simple como antes
       const pagosFormateados = pagos.map(pago => {
         const pagoObj = pago.toObject();
         const venta = pagoObj.ventas;
         const beneficiario = venta?.beneficiarioId;
+        const cliente = beneficiario?.clienteId;
         return {
           _id: pagoObj._id,
           fechaPago: pagoObj.fechaPago,
@@ -28,7 +30,10 @@ const pagoController = {
           updatedAt: pagoObj.updatedAt,
           ventas: venta ? {
             ...venta,
-            beneficiario: beneficiario ? { ...beneficiario } : null
+            beneficiario: beneficiario ? {
+              ...beneficiario,
+              cliente: cliente ? { ...cliente } : null
+            } : null
           } : null,
           valor_total: pagoObj.valor_total || 0,
           valorTotal: pagoObj.valor_total || 0,
