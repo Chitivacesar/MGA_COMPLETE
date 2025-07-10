@@ -1,4 +1,3 @@
-
 const mongoose = require('mongoose');
 
 const usuarioSchema = new mongoose.Schema({
@@ -12,17 +11,18 @@ const usuarioSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
-  email: {
+  correo: {
     type: String,
     required: true,
     unique: true,
     lowercase: true,
-    trim: true
+    trim: true,
+    match: [/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/, 'Debe ser un correo electrónico válido']
   },
-  password: {
+  contrasena: {
     type: String,
     required: true,
-    minlength: 6
+    minlength: 8
   },
   rol: {
     type: String,

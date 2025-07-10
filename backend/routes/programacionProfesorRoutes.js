@@ -4,7 +4,8 @@ const programacionProfesorController = require('../controllers/programacionProfe
 
 // Rutas adicionales para filtros específicos
 router.get('/profesor/:profesorId', programacionProfesorController.getProgramacionesByProfesor);
-router.get('/fecha/:fecha', programacionProfesorController.getProgramacionesByFecha);
+// Remove or comment out the following line since the controller method doesn't exist anymore
+// router.get('/fecha/:fecha', programacionProfesorController.getProgramacionesByFecha);
 router.get('/estado/:estado', programacionProfesorController.getProgramacionesByEstado);
 
 // Rutas principales

@@ -20,82 +20,229 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Paper, // Import Paper
-  Tooltip, // Import Tooltip
+  Paper,
 } from "@mui/material"
-import {
-  Close as CloseIcon,
-  AccessTime as TimeIcon,
-  Person as PersonIcon,
-  CalendarMonth as CalendarIcon, // Import CalendarIcon
-} from "@mui/icons-material"
+import { Close as CloseIcon, AccessTime as TimeIcon, CalendarMonth as CalendarIcon } from "@mui/icons-material"
 
-/**
- * Modal para programar horarios de profesores
- * @param {Object} props - Propiedades del componente
- * @param {boolean} props.isOpen - Indica si el modal está abierto
- * @param {Function} props.onClose - Función para cerrar el modal
- * @param {Function} props.onSubmit - Función para manejar el envío del formulario
- * @param {Array} props.profesores - Lista de profesores disponibles
- * @param {number|null} props.defaultProfesorId - ID del profesor seleccionado por defecto
- */
-export const ScheduleModal = ({ isOpen, onClose, onSubmit, profesores, defaultProfesorId }) => {
-  const [days, setDays] = useState([])
-  const [startTime, setStartTime] = useState("")
-  const [endTime, setEndTime] = useState("")
+export const ScheduleModal = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  profesores = [],
+  defaultProfesorId = "",
+  defaultDays = [],
+  defaultStartTime = "",
+  defaultEndTime = "",
+  defaultEstado = "activo",
+  isEditing = false,
+}) => {
+  const [formData, setFormData] = useState({
+    profesorId: "",
+    days: [],
+    startTime: "",
+    endTime: "",
+    estado: "activo",
+    motivo: "",
+  })
+
   const [selectedOption, setSelectedOption] = useState("")
-  const [profesorId, setProfesorId] = useState(defaultProfesorId || null)
 
-  // Resetear el formulario cuando se abre el modal
+  // Reemplazar la función validateAndNormalizeDays con esta versión más simple y directa:
+
+  const validateAndNormalizeDays = (days) => {
+    console.log("=== INICIO validateAndNormalizeDays ===")
+    console.log("Días recibidos:", days)
+    console.log("Tipo de datos recibidos:", typeof days)
+    console.log("Es array:", Array.isArray(days))
+    console.log("Longitud del array:", days?.length)
+
+    // Definir exactamente los caracteres que MongoDB acepta
+    const validDaysMap = new Map([
+      ["L", "L"],
+      ["M", "M"],
+      ["X", "X"],
+      ["J", "J"],
+      ["V", "V"],
+      ["S", "S"],
+      ["D", "D"],
+    ])
+
+    console.log("Mapa de días válidos:", Array.from(validDaysMap.keys()))
+
+    // Procesar cada día
+    const normalizedDays = days
+      .map((day, index) => {
+        console.log(`--- Procesando día ${index} ---`)
+        console.log(`Valor original: "${day}"`)
+        console.log(`Tipo: ${typeof day}`)
+        console.log(`Longitud: ${day?.length}`)
+        console.log(`Código de carácter: ${day?.charCodeAt ? day.charCodeAt(0) : "N/A"}`)
+
+        // Convertir a string y limpiar
+        const cleanDay = String(day).trim().toUpperCase()
+        console.log(`Después de limpiar: "${cleanDay}"`)
+        console.log(`Longitud después de limpiar: ${cleanDay.length}`)
+
+        // Verificar que sea exactamente un carácter válido
+        if (cleanDay.length === 1 && validDaysMap.has(cleanDay)) {
+          const result = validDaysMap.get(cleanDay)
+          console.log(`✅ Día válido: "${cleanDay}" -> "${result}"`)
+          return result
+        } else {
+          console.log(`❌ Día inválido: "${cleanDay}"`)
+          console.log(`  - Longitud correcta: ${cleanDay.length === 1}`)
+          console.log(`  - Está en mapa: ${validDaysMap.has(cleanDay)}`)
+          return null
+        }
+      })
+      .filter((day) => {
+        const isValid = day !== null
+        if (!isValid) {
+          console.log(`Filtrando día nulo`)
+        }
+        return isValid
+      })
+
+    // Remover duplicados
+    const uniqueDays = [...new Set(normalizedDays)]
+
+    console.log("=== RESULTADO validateAndNormalizeDays ===")
+    console.log("Días normalizados (con duplicados):", normalizedDays)
+    console.log("Días únicos finales:", uniqueDays)
+    console.log("Cantidad final:", uniqueDays.length)
+    console.log("Validación detallada de resultado:")
+    uniqueDays.forEach((day, index) => {
+      console.log(`  [${index}]: "${day}" (código: ${day.charCodeAt(0)})`)
+    })
+
+    if (uniqueDays.length < days.length) {
+      console.warn("⚠️ Se perdieron días durante el procesamiento:")
+      console.warn("Días originales:", days)
+      console.warn("Días finales:", uniqueDays)
+    }
+
+    console.log("=== FIN validateAndNormalizeDays ===")
+    return uniqueDays
+  }
+
+  // Initialize form when modal opens
   useEffect(() => {
     if (isOpen) {
-      setDays([])
-      setStartTime("")
-      setEndTime("")
+      const normalizedDefaultDays = validateAndNormalizeDays(defaultDays || [])
+
+      setFormData({
+        profesorId: defaultProfesorId || "",
+        days: normalizedDefaultDays,
+        startTime: defaultStartTime || "",
+        endTime: defaultEndTime || "",
+        estado: isEditing ? defaultEstado : "activo",
+        motivo: "",
+      })
       setSelectedOption("")
-      setProfesorId(defaultProfesorId || null)
     }
-  }, [isOpen, defaultProfesorId])
+  }, [isOpen])
+
+  const handleInputChange = (field, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }))
+  }
 
   const handleDayChange = (day) => {
-    setDays((prevDays) => (prevDays.includes(day) ? prevDays.filter((d) => d !== day) : [...prevDays, day]))
+    const normalizedDay = validateAndNormalizeDays([day])[0]
+    if (!normalizedDay) return
+
+    const newDays = formData.days.includes(normalizedDay)
+      ? formData.days.filter((d) => d !== normalizedDay)
+      : [...formData.days, normalizedDay]
+
+    const validatedDays = validateAndNormalizeDays(newDays)
+    handleInputChange("days", validatedDays)
+    setSelectedOption("") // Reset selected option when manually changing days
   }
 
-  const handleOptionChange = (option) => {
-    setSelectedOption(option)
+  // También reemplazar la creación de días en handleOptionChange:
 
-    // Establecer los días según la opción seleccionada
+  const handleOptionChange = (option) => {
+    console.log("=== INICIO handleOptionChange ===")
+    console.log("Opción seleccionada:", option)
+
+    setSelectedOption(option)
+    let newDays = []
+
     switch (option) {
       case "all":
-        setDays(["L", "M", "X", "J", "V", "S", "D"])
+        newDays = ["L", "M", "X", "J", "V", "S", "D"]
         break
       case "weekend":
-        setDays(["S", "D"])
+        newDays = ["S", "D"]
         break
       case "weekdays":
-        setDays(["L", "M", "X", "J", "V"])
+        newDays = ["L", "M", "X", "J", "V"]
         break
       case "mondayToSaturday":
-        setDays(["L", "M", "X", "J", "V", "S"])
+        newDays = ["L", "M", "X", "J", "V", "S"]
         break
       default:
-        setDays([])
+        newDays = []
+    }
+
+    console.log("Días creados inicialmente:", newDays)
+    console.log("Cantidad de días creados:", newDays.length)
+    console.log("Análisis de cada día creado:")
+    newDays.forEach((day, index) => {
+      console.log(`  [${index}]: "${day}" (código: ${day.charCodeAt(0)})`)
+    })
+
+    // Validar y normalizar los días antes de asignar
+    console.log("Enviando a validateAndNormalizeDays...")
+    const validatedDays = validateAndNormalizeDays(newDays)
+
+    console.log("Días después de validación:", validatedDays)
+    console.log("Cantidad después de validación:", validatedDays.length)
+
+    if (validatedDays.length !== newDays.length) {
+      console.warn("⚠️ ALERTA: Se perdieron días durante la validación!")
+      console.warn("Días originales:", newDays)
+      console.warn("Días validados:", validatedDays)
+      console.warn(
+        "Días perdidos:",
+        newDays.filter((d) => !validatedDays.includes(d)),
+      )
+    }
+
+    handleInputChange("days", validatedDays)
+    console.log("=== FIN handleOptionChange ===")
+  }
+
+  const handleSubmit = () => {
+    if (isFormValid) {
+      // Validación final antes de enviar
+      const finalValidatedDays = validateAndNormalizeDays(formData.days)
+
+      console.log("=== VALIDACIÓN FINAL ===")
+      console.log("Días antes de validación:", formData.days)
+      console.log("Días después de validación:", finalValidatedDays)
+      console.log("Cada día validado:")
+      finalValidatedDays.forEach((day, index) => {
+        console.log(`  ${index}: "${day}" (código: ${day.charCodeAt(0)}, longitud: ${day.length})`)
+      })
+
+      onSubmit({
+        profesorId: formData.profesorId,
+        days: finalValidatedDays,
+        startTime: formData.startTime,
+        endTime: formData.endTime,
+        estado: formData.estado,
+        motivo: formData.estado === "cancelado" ? formData.motivo : "",
+      })
+      onClose()
     }
   }
 
-  const handleProfesorChange = (event) => {
-    setProfesorId(event.target.value ? Number(event.target.value) : null)
-  }
+  const isFormValid = formData.days.length > 0 && formData.startTime && formData.endTime && formData.profesorId
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    onSubmit({ days, startTime, endTime, profesorId })
-    onClose()
-  }
-
-  const isFormValid = days.length > 0 && startTime && endTime && profesorId !== null
-
-  // Mapeo de días para mostrar nombres completos en Tooltip
   const dayNames = {
     L: "Lunes",
     M: "Martes",
@@ -106,7 +253,9 @@ export const ScheduleModal = ({ isOpen, onClose, onSubmit, profesores, defaultPr
     D: "Domingo",
   }
 
-  if (!isOpen) return null
+  // Y cambiar validDays a un array simple:
+
+  const validDays = ["L", "M", "X", "J", "V", "S", "D"]
 
   return (
     <Dialog
@@ -118,7 +267,7 @@ export const ScheduleModal = ({ isOpen, onClose, onSubmit, profesores, defaultPr
         sx: {
           borderRadius: "12px",
           boxShadow: "0 4px 30px rgba(0,0,0,0.2)",
-          overflow: "hidden", // Prevent content overflow issues
+          overflow: "hidden",
         },
       }}
     >
@@ -130,226 +279,218 @@ export const ScheduleModal = ({ isOpen, onClose, onSubmit, profesores, defaultPr
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          p: 2, // Consistent padding
+          p: 2,
         }}
       >
-        {/* Add Icon and consistent title structure */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <CalendarIcon />
-          Agregar Programación
+          {isEditing ? "Editar Programación" : "Agregar Programación"}
         </Box>
         <IconButton onClick={onClose} sx={{ color: "white" }}>
           <CloseIcon />
         </IconButton>
       </DialogTitle>
 
-      {/* Adjust padding for DialogContent */}
       <DialogContent sx={{ p: 3 }}>
-        <form onSubmit={handleSubmit}>
-          {/* Add margin-top to the main Grid container */}
-          <Grid container spacing={3} sx={{ mt: 1 }}> {/* Increase spacing for better layout */}
-            {/* Profesor Select - No major changes needed here, assuming it's okay */}
+        <Grid container spacing={3} sx={{ mt: 1 }}>
+          {/* Selector de Profesor */}
+          <Grid item xs={12}>
+            <FormControl fullWidth>
+              <InputLabel>Profesor</InputLabel>
+              <Select
+                value={formData.profesorId}
+                onChange={(e) => handleInputChange("profesorId", e.target.value)}
+                label="Profesor"
+                required
+              >
+                <MenuItem value="">
+                  <em>Seleccionar Profesor</em>
+                </MenuItem>
+                {profesores.map((profesor) => (
+                  <MenuItem key={profesor.id} value={profesor.id}>
+                    <Box sx={{ display: "flex", alignItems: "center" }}>
+                      <Box
+                        sx={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: "50%",
+                          bgcolor: profesor.color || "#ccc",
+                          mr: 1,
+                        }}
+                      />
+                      {profesor.nombre}
+                      {profesor.especialidad && ` - ${profesor.especialidad}`}
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          {/* Estado (solo en edición) */}
+          {isEditing && (
             <Grid item xs={12}>
-              <FormControl fullWidth> {/* Removed margin="normal" */}
-                <InputLabel id="profesor-label">Profesor</InputLabel>
+              <FormControl fullWidth>
+                <InputLabel>Estado</InputLabel>
                 <Select
-                  labelId="profesor-label"
-                  value={profesorId?.toString() || ""}
-                  onChange={handleProfesorChange}
-                  label="Profesor"
-                  required
-                  // Remove the unsupported startAdornment prop
-                  // startAdornment={
-                  //   <InputAdornment position="start">
-                  //     <PersonIcon />
-                  //   </InputAdornment>
-                  // }
-                  // Add renderValue to display icon and text
-                  renderValue={(selected) => {
-                    if (!selected) {
-                      // Optionally return a placeholder or just the icon if nothing is selected
-                      return (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}>
-                           <PersonIcon fontSize="small" />
-                           {/* You could add placeholder text here if needed */}
-                        </Box>
-                      );
-                    }
-                    const selectedProfesor = profesores.find(p => p.id.toString() === selected);
-                    return (
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <PersonIcon fontSize="small" />
-                        {selectedProfesor ? `${selectedProfesor.nombre} ${selectedProfesor.apellidos}` : ''}
-                      </Box>
-                    );
-                  }}
+                  value={formData.estado}
+                  onChange={(e) => handleInputChange("estado", e.target.value)}
+                  label="Estado"
                 >
-                  {/* Add a placeholder MenuItem if needed, especially if required */}
-                  {/* <MenuItem value="" disabled>
-                    <em>Seleccionar Profesor</em>
-                  </MenuItem> */}
-                  {profesores.map((profesor) => (
-                    <MenuItem key={profesor.id} value={profesor.id.toString()}>
-                      <Box sx={{ display: "flex", alignItems: "center" }}>
-                        <Box
-                          sx={{
-                            width: 12,
-                            height: 12,
-                            borderRadius: "50%",
-                            bgcolor: profesor.color || "#ccc", // Use a default color
-                            mr: 1,
-                          }}
-                        />
-                        {profesor.nombre} {profesor.apellidos} {/* Show full name */}
-                        {profesor.especialidad && ` - ${profesor.especialidad}`} {/* Show especialidad */}
-                      </Box>
-                    </MenuItem>
-                  ))}
+                  <MenuItem value="activo">Activo</MenuItem>
+                  <MenuItem value="cancelado">Cancelado</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
+          )}
 
-            {/* Day Selection Chips */}
+          {/* Motivo de cancelación */}
+          {isEditing && formData.estado === "cancelado" && (
             <Grid item xs={12}>
-              <Typography variant="subtitle1" fontWeight={500} gutterBottom>
-                Seleccionar días
-              </Typography>
-              {/* Center the chips */}
-              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 2, justifyContent: "center" }}>
-                {Object.entries(dayNames).map(([key, name]) => ( // Use dayNames for tooltips
-                  <Tooltip title={name} key={key}>
-                    <Chip
-                      label={key}
-                      onClick={() => handleDayChange(key)}
-                      color={days.includes(key) ? "primary" : "default"}
-                      variant={days.includes(key) ? "filled" : "outlined"}
-                      sx={{
-                        fontWeight: 600,
-                        minWidth: "40px", // Make slightly larger
-                        height: "40px",
-                        borderRadius: "50%", // Circular chips
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
-                        "&:hover": {
-                          transform: "scale(1.05)",
-                          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                        },
-                      }}
-                    />
-                  </Tooltip>
-                ))}
-              </Box>
+              <TextField
+                fullWidth
+                label="Motivo de cancelación"
+                value={formData.motivo}
+                onChange={(e) => handleInputChange("motivo", e.target.value)}
+                multiline
+                rows={2}
+              />
             </Grid>
+          )}
 
-            {/* Quick Options - Wrap in Paper for visual grouping */}
-            <Grid item xs={12}>
-               <Paper elevation={0} sx={{ p: 2, border: '1px solid #e0e0e0', borderRadius: '8px', bgcolor: 'rgba(4, 85, 162, 0.02)' }}>
-                <Typography variant="subtitle1" fontWeight={500} gutterBottom>
-                  Opciones rápidas
+          {/* Selección de días */}
+          <Grid item xs={12}>
+            <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 500 }}>
+              Seleccionar días
+            </Typography>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 2 }}>
+              {validDays.map((day) => (
+                <Chip
+                  key={day}
+                  label={day}
+                  onClick={() => handleDayChange(day)}
+                  color={formData.days.includes(day) ? "primary" : "default"}
+                  variant={formData.days.includes(day) ? "filled" : "outlined"}
+                  sx={{
+                    borderRadius: "50%",
+                    width: 36,
+                    height: 36,
+                    fontSize: "0.875rem",
+                    cursor: "pointer",
+                  }}
+                />
+              ))}
+            </Box>
+
+            {/* Mostrar días seleccionados en español */}
+            {formData.days.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Días seleccionados: {formData.days.map((d) => dayNames[d]).join(", ")}
                 </Typography>
-                <Grid container spacing={0}> {/* Reduced spacing inside paper */}
-                  {/* Checkbox options */}
-                  <Grid item xs={12} sm={6}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox checked={selectedOption === "all"} onChange={() => handleOptionChange("all")} color="primary"/>
-                      }
-                      label="Todos los días"
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={selectedOption === "weekend"}
-                          onChange={() => handleOptionChange("weekend")}
-                          color="primary"
-                        />
-                      }
-                      label="Sábado y domingo"
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={selectedOption === "weekdays"}
-                          onChange={() => handleOptionChange("weekdays")}
-                          color="primary"
-                        />
-                      }
-                      label="Lunes a viernes"
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={selectedOption === "mondayToSaturday"}
-                          onChange={() => handleOptionChange("mondayToSaturday")}
-                          color="primary"
-                        />
-                      }
-                      label="Lunes a sábado"
-                    />
-                  </Grid>
-                </Grid>
-               </Paper>
-            </Grid>
+              </Box>
+            )}
 
-            {/* Time Inputs */}
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="Hora de Inicio"
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                fullWidth
-                required
-                InputLabelProps={{
-                  shrink: true,
-                }}
-                inputProps={{
-                  step: 300, // 5 min
-                }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <TimeIcon />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="Hora de Fin"
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                fullWidth
-                required
-                InputLabelProps={{
-                  shrink: true,
-                }}
-                inputProps={{
-                  step: 300, // 5 min
-                }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <TimeIcon />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
+            {/* Opciones rápidas */}
+            <Paper sx={{ p: 2, bgcolor: "#f8f9fa", mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Opciones rápidas
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={selectedOption === "all"}
+                        onChange={() => handleOptionChange(selectedOption === "all" ? "" : "all")}
+                        size="small"
+                      />
+                    }
+                    label="Todos los días"
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={selectedOption === "weekend"}
+                        onChange={() => handleOptionChange(selectedOption === "weekend" ? "" : "weekend")}
+                        size="small"
+                      />
+                    }
+                    label="Sábado y domingo"
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={selectedOption === "weekdays"}
+                        onChange={() => handleOptionChange(selectedOption === "weekdays" ? "" : "weekdays")}
+                        size="small"
+                      />
+                    }
+                    label="Lunes a viernes"
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={selectedOption === "mondayToSaturday"}
+                        onChange={() =>
+                          handleOptionChange(selectedOption === "mondayToSaturday" ? "" : "mondayToSaturday")
+                        }
+                        size="small"
+                      />
+                    }
+                    label="Lunes a sábado"
+                  />
+                </Grid>
+              </Grid>
+            </Paper>
           </Grid>
-        </form>
+
+          {/* Horarios */}
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Hora de Inicio"
+              type="time"
+              value={formData.startTime}
+              onChange={(e) => handleInputChange("startTime", e.target.value)}
+              fullWidth
+              required
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <TimeIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
+
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Hora de Fin"
+              type="time"
+              value={formData.endTime}
+              onChange={(e) => handleInputChange("endTime", e.target.value)}
+              fullWidth
+              required
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <TimeIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
+        </Grid>
       </DialogContent>
 
-      {/* Consistent styling for DialogActions */}
-      <DialogActions sx={{ p: 2, borderTop: '1px solid #e0e0e0' }}>
+      <DialogActions sx={{ p: 2, bgcolor: "#f9f9f9", justifyContent: "flex-end", gap: 1 }}>
         <Button
           onClick={onClose}
           variant="outlined"
@@ -357,6 +498,8 @@ export const ScheduleModal = ({ isOpen, onClose, onSubmit, profesores, defaultPr
             borderRadius: "8px",
             textTransform: "none",
             fontWeight: 500,
+            px: 3,
+            borderColor: "rgba(0, 0, 0, 0.12)",
           }}
         >
           Cancelar
@@ -364,18 +507,20 @@ export const ScheduleModal = ({ isOpen, onClose, onSubmit, profesores, defaultPr
         <Button
           onClick={handleSubmit}
           variant="contained"
+          disableElevation
           disabled={!isFormValid}
           sx={{
+            backgroundColor: "#0455a2",
             borderRadius: "8px",
             textTransform: "none",
             fontWeight: 500,
-            bgcolor: "#0455a2",
+            px: 3,
             "&:hover": {
-              bgcolor: "#033b70",
+              backgroundColor: "#033b70",
             },
           }}
         >
-          Agregar Programación
+          {isEditing ? "Guardar Cambios" : "Agregar Programación"}
         </Button>
       </DialogActions>
     </Dialog>

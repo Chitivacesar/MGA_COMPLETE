@@ -1,5 +1,3 @@
-
-
 const Usuario = require('../models/usuario');
 const bcrypt = require('bcryptjs');
 
@@ -71,12 +69,30 @@ exports.updateUsuario = async (req, res) => {
   try {
     const usuario = await Usuario.findById(req.params.id);
     if (usuario) {
-      // Si se proporciona una nueva contraseña, encriptarla
+      // Campos que se pueden actualizar
+      const camposActualizables = [
+        'nombre',
+        'apellido',
+        'tipo_de_documento',
+        'documento',
+        'correo',
+        'estado',
+        'rol'
+      ];
+
+      // Actualizar solo los campos permitidos que vienen en el request
+      camposActualizables.forEach(campo => {
+        if (req.body[campo] !== undefined) {
+          usuario[campo] = req.body[campo];
+        }
+      });
+
+      // Solo actualizar contraseña si se proporciona una nueva
       if (req.body.contrasena) {
         const salt = await bcrypt.genSalt(10);
-        req.body.contrasena = await bcrypt.hash(req.body.contrasena, salt);
+        usuario.contrasena = await bcrypt.hash(req.body.contrasena, salt);
       }
-      Object.assign(usuario, req.body);
+
       const usuarioActualizado = await usuario.save();
       const usuarioRespuesta = usuarioActualizado.toObject();
       delete usuarioRespuesta.contrasena;
