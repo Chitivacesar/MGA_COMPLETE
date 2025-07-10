@@ -7,10 +7,10 @@ const api = axios.create({
     ...API_CONFIG.HEADERS,
     'Accept': 'application/json'
   },
-  timeout: 10000 // Agregamos un timeout de 10 segundos
+  timeout: 10000
 });
 
-// Mejorar el interceptor para manejar errores
+// Interceptor para manejar respuestas y errores
 api.interceptors.response.use(
   response => response.data,
   error => {
@@ -29,7 +29,7 @@ export const usuariosService = {
   getAll: async () => {
     try {
       const response = await api.get(API_CONFIG.ENDPOINTS.USUARIOS);
-      return response; // El interceptor ya transformó esto a response.data
+      return response;
     } catch (error) {
       console.error('Error en getAll usuarios:', error);
       throw error;
@@ -37,53 +37,118 @@ export const usuariosService = {
   },
 
   getById: async (id) => {
-    const response = await api.get(`${API_CONFIG.ENDPOINTS.USUARIOS}/${id}`);
-    return response.data;
+    try {
+      const response = await api.get(`${API_CONFIG.ENDPOINTS.USUARIOS}/${id}`);
+      return response;
+    } catch (error) {
+      console.error('Error en getById usuarios:', error);
+      throw error;
+    }
   },
 
   create: async (userData) => {
-    const response = await api.post(API_CONFIG.ENDPOINTS.USUARIOS, userData);
-    return response.data;
+    try {
+      const response = await api.post(API_CONFIG.ENDPOINTS.USUARIOS, userData);
+      return response;
+    } catch (error) {
+      console.error('Error en create usuarios:', error);
+      throw error;
+    }
   },
 
   update: async (id, userData) => {
-    const response = await api.put(`${API_CONFIG.ENDPOINTS.USUARIOS}/${id}`, userData);
-    return response.data;
+    try {
+      const response = await api.put(`${API_CONFIG.ENDPOINTS.USUARIOS}/${id}`, userData);
+      return response;
+    } catch (error) {
+      console.error('Error en update usuarios:', error);
+      throw error;
+    }
   },
 
   delete: async (id) => {
-    const response = await api.delete(`${API_CONFIG.ENDPOINTS.USUARIOS}/${id}`);
-    return response.data;
+    try {
+      const response = await api.delete(`${API_CONFIG.ENDPOINTS.USUARIOS}/${id}`);
+      return response;
+    } catch (error) {
+      console.error('Error en delete usuarios:', error);
+      throw error;
+    }
   },
 };
 
 // Servicios para roles
 export const rolesService = {
   getAll: async () => {
-    const response = await api.get(API_CONFIG.ENDPOINTS.ROLES);
-    return response.data;
+    try {
+      const response = await api.get(API_CONFIG.ENDPOINTS.ROLES);
+      return response;
+    } catch (error) {
+      console.error('Error en getAll roles:', error);
+      throw error;
+    }
   },
 
   getById: async (id) => {
-    const response = await api.get(`${API_CONFIG.ENDPOINTS.ROLES}/${id}`);
-    return response.data;
+    try {
+      const response = await api.get(`${API_CONFIG.ENDPOINTS.ROLES}/${id}`);
+      return response;
+    } catch (error) {
+      console.error('Error en getById roles:', error);
+      throw error;
+    }
   },
 };
 
 // Servicios para usuarios_has_rol
 export const usuariosHasRolService = {
   getAll: async () => {
-    const response = await api.get(API_CONFIG.ENDPOINTS.USUARIOS_HAS_ROL);
-    return response.data;
+    try {
+      const response = await api.get(API_CONFIG.ENDPOINTS.USUARIOS_HAS_ROL);
+      return response;
+    } catch (error) {
+      console.error('Error en getAll usuariosHasRol:', error);
+      throw error;
+    }
+  },
+
+  getByUsuarioId: async (usuarioId) => {
+    try {
+      const response = await api.get(`${API_CONFIG.ENDPOINTS.USUARIOS_HAS_ROL}/usuario/${usuarioId}`);
+      return response;
+    } catch (error) {
+      console.error('Error en getByUsuarioId usuariosHasRol:', error);
+      throw error;
+    }
   },
 
   create: async (usuarioRolData) => {
-    const response = await api.post(API_CONFIG.ENDPOINTS.USUARIOS_HAS_ROL, usuarioRolData);
-    return response.data;
+    try {
+      const response = await api.post(API_CONFIG.ENDPOINTS.USUARIOS_HAS_ROL, usuarioRolData);
+      return response;
+    } catch (error) {
+      console.error('Error en create usuariosHasRol:', error);
+      throw error;
+    }
   },
 
   delete: async (id) => {
-    const response = await api.delete(`${API_CONFIG.ENDPOINTS.USUARIOS_HAS_ROL}/${id}`);
-    return response.data;
+    try {
+      const response = await api.delete(`${API_CONFIG.ENDPOINTS.USUARIOS_HAS_ROL}/${id}`);
+      return response;
+    } catch (error) {
+      console.error('Error en delete usuariosHasRol:', error);
+      throw error;
+    }
+  },
+
+  deleteByUsuarioId: async (usuarioId) => {
+    try {
+      const response = await api.delete(`${API_CONFIG.ENDPOINTS.USUARIOS_HAS_ROL}/usuario/${usuarioId}`);
+      return response;
+    } catch (error) {
+      console.error('Error en deleteByUsuarioId usuariosHasRol:', error);
+      throw error;
+    }
   },
 };

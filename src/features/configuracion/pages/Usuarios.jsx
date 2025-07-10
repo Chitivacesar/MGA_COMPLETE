@@ -1,3 +1,5 @@
+
+
 'use client'
 
 import { useState, useEffect, useMemo } from "react"
@@ -6,15 +8,14 @@ import { DetailModal } from "../../../shared/components/DetailModal"
 import { FormModal } from "../../../shared/components/FormModal"
 import { StatusButton } from "../../../shared/components/StatusButton"
 import { UserRoleAssignment } from "../../../shared/components/UserRoleAssignment"
-import { Button, Box, IconButton } from "@mui/material"
-import { PersonAdd as PersonAddIcon, Visibility as VisibilityIcon, VisibilityOff as VisibilityOffIcon } from "@mui/icons-material"
+import { Button } from "@mui/material"
+import { PersonAdd as PersonAddIcon } from "@mui/icons-material"
 import { usuariosService, rolesService, usuariosHasRolService } from "../../../shared/services/api"
 import { toast } from 'react-toastify'
 
 const Usuarios = () => {
   const [roles, setRoles] = useState([])
   const [usuarios, setUsuarios] = useState([])
-  const [showPasswords, setShowPasswords] = useState({})
   const [selectedUsuario, setSelectedUsuario] = useState(null)
   const [detailModalOpen, setDetailModalOpen] = useState(false)
   const [formModalOpen, setFormModalOpen] = useState(false)
@@ -41,45 +42,31 @@ const Usuarios = () => {
           ? usuariosHasRolResp
           : (Array.isArray(usuariosHasRolResp?.asignaciones) ? usuariosHasRolResp.asignaciones : []);
 
-        console.log('Datos cargados:', {
-          usuarios: usuariosData,
-          roles: rolesData,
-          asignaciones: usuariosHasRolData
-        });
+        // Procesar usuarios con sus roles
 
         // Asignar roles a cada usuario
         const usuariosConRoles = usuariosData.map(usuario => {
           // Obtener todas las asignaciones del usuario
-          const asignacionesUsuario = usuariosHasRolData.filter(
-            asignacion => 
-              asignacion.usuarioId && 
-              asignacion.usuarioId._id === usuario._id
-          );
+          const asignacionesUsuario = usuariosHasRolData.filter(asignacion => {
+            if (!asignacion.usuarioId) return false;
+            
+            // Manejar tanto ObjectId como objeto poblado
+            const usuarioIdEnAsignacion = typeof asignacion.usuarioId === 'string' 
+              ? asignacion.usuarioId 
+              : asignacion.usuarioId._id || asignacion.usuarioId.id;
+              
+            return usuarioIdEnAsignacion === usuario._id;
+          });
           
-          console.log(`Todas las asignaciones para usuario ${usuario.nombre}:`, asignacionesUsuario);
-          
-          // Agrupar asignaciones por rolId y mantener solo la más reciente por cada rol
-          const asignacionesPorRol = asignacionesUsuario.reduce((acc, asignacion) => {
-            const rolId = asignacion.rolId._id;
-            if (!acc[rolId] || new Date(acc[rolId].createdAt) < new Date(asignacion.createdAt)) {
-              acc[rolId] = asignacion;
-            }
-            return acc;
-          }, {});
-
-          // Filtrar solo las asignaciones activas más recientes
-          const asignacionesActivas = Object.values(asignacionesPorRol).filter(
-            asignacion => asignacion.estado === true
-          );
-          
-          console.log(`Asignaciones activas más recientes para usuario ${usuario.nombre}:`, asignacionesActivas);
-          
-          // Extraer los roles de las asignaciones activas
-          const rolesUsuario = asignacionesActivas
+          // Extraer roles de las asignaciones activas
+          const rolesUsuario = asignacionesUsuario
+            .filter(asignacion => {
+              // Por defecto, considerar activo si no hay campo estado
+              const estado = asignacion.estado !== false;
+              return estado && asignacion.rolId;
+            })
             .map(asignacion => asignacion.rolId)
-            .filter(rol => rol && rol._id); // Asegurar que solo se incluyan roles válidos
-          
-          console.log(`Roles activos para usuario ${usuario.nombre}:`, rolesUsuario);
+            .filter(rol => rol); // Solo roles válidos
           
           return {
             ...usuario,
@@ -373,19 +360,33 @@ const Usuarios = () => {
       const { userId, roleIds } = data;
       console.log('Guardando asignación de roles:', { userId, roleIds });
 
+      // Primero eliminar todas las asignaciones existentes del usuario
+      try {
+        await usuariosHasRolService.deleteByUsuarioId(userId);
+        console.log('Asignaciones anteriores eliminadas');
+      } catch (error) {
+        console.log('No había asignaciones anteriores o error al eliminar:', error);
+      }
+
       // Crear nuevas asignaciones para cada rol seleccionado
       console.log('Creando asignaciones para roles:', roleIds);
       const assignmentPromises = roleIds.map(roleId => {
         const newAssignment = {
           usuarioId: userId,
-          rolId: roleId,
-          estado: true
+          rolId: roleId
         };
         console.log('Creando asignación:', newAssignment);
         return usuariosHasRolService.create(newAssignment);
       });
 
-      await Promise.all(assignmentPromises);
+      const results = await Promise.allSettled(assignmentPromises);
+      
+      // Verificar si hubo errores en las asignaciones
+      const errors = results.filter(result => result.status === 'rejected');
+      if (errors.length > 0) {
+        console.warn('Algunos roles no pudieron ser asignados:', errors);
+        // Continuar con el proceso aunque haya algunos errores
+      }
 
       // Obtener los roles actualizados del usuario usando el endpoint modificado
       const updatedRoles = await usuariosHasRolService.getByUsuarioId(userId);
@@ -458,7 +459,7 @@ const Usuarios = () => {
         if (row.roles && Array.isArray(row.roles) && row.roles.length > 0) {
           return row.roles.map(rol => {
             if (typeof rol === 'object' && rol !== null) {
-              return rol.nombre || (rol.rolId && rol.rolId.nombre) || 'Rol sin nombre';
+              return rol.nombre || rol.name || 'Rol sin nombre';
             }
             return 'Rol sin nombre';
           }).join(", ");
@@ -499,50 +500,22 @@ const Usuarios = () => {
     { id: "correo", label: "Correo" },
     {
       id: "roles",
-      label: "Rol",
+      label: "Roles Asignados",
       render: (value, row) => {
-        console.log('Renderizando roles:', { value, row, selectedUsuario });
-        // Si estamos en el modal de detalle, usar selectedUsuario
-        if (detailModalOpen && selectedUsuario) {
-          const userRoles = selectedUsuario.roles;
-          console.log('Roles del usuario seleccionado:', userRoles);
-          if (userRoles && userRoles.length > 0) {
-            return userRoles.map(rol => {
-              // Verificar si el rol es un objeto completo o solo tiene el ID
-              if (typeof rol === 'object' && rol !== null) {
-                return rol.nombre || (rol.rolId && rol.rolId.nombre) || 'Rol sin nombre';
-              }
-              return 'Rol sin nombre';
-            }).join(", ");
-          }
-          return "Sin rol asignado";
-        }
-        // Si estamos en la tabla, usar el valor de la fila
-        if (value && Array.isArray(value) && value.length > 0) {
-          return value.map(rol => {
+        // Usar selectedUsuario si está disponible, sino usar la fila
+        const usuario = selectedUsuario || row;
+        const userRoles = usuario?.roles;
+        
+        if (userRoles && Array.isArray(userRoles) && userRoles.length > 0) {
+          return userRoles.map(rol => {
             if (typeof rol === 'object' && rol !== null) {
-              return rol.nombre || (rol.rolId && rol.rolId.nombre) || 'Rol sin nombre';
+              return rol.nombre || rol.name || 'Rol sin nombre';
             }
             return 'Rol sin nombre';
           }).join(", ");
         }
-        return "Sin rol asignado";
+        return "Sin roles asignados";
       },
-    },
-    {
-      id: "contrasena",
-      label: "Contraseña",
-      render: (value, row) => (
-        <Box sx={{ display: "flex", alignItems: "center" }}>
-          {showPasswords[row._id] ? value : "••••••••"}
-          <IconButton
-            size="small"
-            onClick={() => setShowPasswords(prev => ({ ...prev, [row._id]: !prev[row._id] }))}
-          >
-            {showPasswords[row._id] ? <VisibilityOffIcon /> : <VisibilityIcon />}
-          </IconButton>
-        </Box>
-      ),
     },
     { id: "estado", label: "Estado", render: (value) => <StatusButton active={value} /> },
   ]

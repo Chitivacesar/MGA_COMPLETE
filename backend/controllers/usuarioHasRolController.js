@@ -1,3 +1,5 @@
+
+
 const UsuarioHasRol = require('../models/UsuarioHasRol');
 
 // GET - Obtener todas las relaciones usuario-rol
@@ -30,16 +32,36 @@ exports.getUsuarioHasRolById = async (req, res) => {
 
 // POST - Crear nueva relación usuario-rol
 exports.createUsuarioHasRol = async (req, res) => {
-  const nuevaRelacion = new UsuarioHasRol({
-    usuarioId: req.body.usuarioId,
-    rolId: req.body.rolId
-  });
-
   try {
+    // Verificar si ya existe la relación
+    const existeRelacion = await UsuarioHasRol.findOne({
+      usuarioId: req.body.usuarioId,
+      rolId: req.body.rolId
+    });
+
+    if (existeRelacion) {
+      return res.status(409).json({ 
+        message: 'El usuario ya tiene asignado este rol',
+        code: 'DUPLICATE_ROLE_ASSIGNMENT'
+      });
+    }
+
+    const nuevaRelacion = new UsuarioHasRol({
+      usuarioId: req.body.usuarioId,
+      rolId: req.body.rolId
+    });
+
     const guardado = await nuevaRelacion.save();
     res.status(201).json(guardado);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    if (error.code === 11000) {
+      res.status(409).json({ 
+        message: 'El usuario ya tiene asignado este rol',
+        code: 'DUPLICATE_ROLE_ASSIGNMENT'
+      });
+    } else {
+      res.status(400).json({ message: error.message });
+    }
   }
 };
 
@@ -59,6 +81,18 @@ exports.updateUsuarioHasRol = async (req, res) => {
   }
 };
 
+// GET - Obtener relaciones por usuario ID
+exports.getUsuarioHasRolesByUsuarioId = async (req, res) => {
+  try {
+    const relaciones = await UsuarioHasRol.find({ usuarioId: req.params.usuarioId })
+      .populate('usuarioId')
+      .populate('rolId');
+    res.json(relaciones);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // DELETE - Eliminar relación usuario-rol
 exports.deleteUsuarioHasRol = async (req, res) => {
   try {
@@ -69,6 +103,16 @@ exports.deleteUsuarioHasRol = async (req, res) => {
     } else {
       res.status(404).json({ message: 'Relación no encontrada' });
     }
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// DELETE - Eliminar todas las relaciones de un usuario
+exports.deleteUsuarioHasRolesByUsuarioId = async (req, res) => {
+  try {
+    const result = await UsuarioHasRol.deleteMany({ usuarioId: req.params.usuarioId });
+    res.json({ message: `${result.deletedCount} relaciones eliminadas` });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

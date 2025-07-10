@@ -47,7 +47,7 @@ exports.getRoles = async (req, res) => {
       })
       .sort({ nombre: 1 });
 
-    res.json(roles);
+    res.json({ roles });
   } catch (error) {
     console.error('Error al obtener roles:', error);
     res.status(500).json({ message: 'Error al obtener los roles' });

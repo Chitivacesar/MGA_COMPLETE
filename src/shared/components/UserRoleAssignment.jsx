@@ -1,3 +1,5 @@
+
+
 import { useState, useEffect } from 'react';
 import { 
   Dialog, 
@@ -28,6 +30,9 @@ export const UserRoleAssignment = ({
 }) => {
   const [selectedRoles, setSelectedRoles] = useState([]);
   const [primaryRole, setPrimaryRole] = useState('');
+
+  // Debug: Log de props recibidas
+  console.log('UserRoleAssignment - Props recibidas:', { usuario, roles, open });
 
   useEffect(() => {
     if (usuario && usuario.roles) {
@@ -122,18 +127,27 @@ export const UserRoleAssignment = ({
           </TableRow>
         </TableHead>
         <TableBody>
-          {roles && roles.map((role) => (
-            <TableRow key={role._id}>
-              <TableCell padding="checkbox">
-                <Checkbox
-                  checked={selectedRoles.includes(role._id)}
-                  onChange={() => handleToggleRole(role._id)}
-                />
+          {roles && roles.length > 0 ? roles.map((role) => {
+            console.log('Renderizando rol:', role);
+            return (
+              <TableRow key={role._id}>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    checked={selectedRoles.includes(role._id)}
+                    onChange={() => handleToggleRole(role._id)}
+                  />
+                </TableCell>
+                <TableCell>{role.nombre}</TableCell>
+                <TableCell>{role.descripcion}</TableCell>
+              </TableRow>
+            );
+          }) : (
+            <TableRow>
+              <TableCell colSpan={3} align="center">
+                {roles ? 'No hay roles disponibles' : 'Cargando roles...'}
               </TableCell>
-              <TableCell>{role.nombre}</TableCell>
-              <TableCell>{role.descripcion}</TableCell>
             </TableRow>
-          ))}
+          )}
         </TableBody>
       </Table>
       
