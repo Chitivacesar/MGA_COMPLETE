@@ -29,7 +29,7 @@ import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from
 export const FormModal = ({
   title,
   subtitle,
-  fields,
+  fields = [],
   initialData,
   open,
   onClose,
@@ -43,12 +43,16 @@ export const FormModal = ({
     if (open) {
       if (initialData) {
         setFormData({ ...initialData })
-      } else {
+      } else if (fields?.length > 0) {
         const defaultData = {}
         fields.forEach((field) => {
-          defaultData[field.id] = field.defaultValue || ""
+          if (field?.id) {
+            defaultData[field.id] = field.defaultValue || ""
+          }
         })
         setFormData(defaultData)
+      } else {
+        setFormData({})
       }
       setErrors({})
     }
@@ -56,27 +60,39 @@ export const FormModal = ({
 
   // New function to validate a single field
   const validateField = (field, value) => {
+    if (!field) return null;
+
     // Check required fields
     if (
       field.required &&
       (value === undefined || value === null || value === "")
     ) {
-      return `${field.label} es requerido`
+      return `${field.label || 'Campo'} es requerido`
     }
 
     // Check custom validation
     if (field.validate && value !== undefined && value !== null) {
-      const validationError = field.validate(value, formData)
-      if (validationError) {
-        return validationError
+      try {
+        const validationError = field.validate(value, formData)
+        if (validationError) {
+          return validationError
+        }
+      } catch (error) {
+        console.error('Error in field validation:', error)
+        return 'Error en la validación'
       }
     }
 
     // Check validator (for backward compatibility)
     if (field.validator && value !== undefined && value !== null) {
-      const validationError = field.validator(value)
-      if (validationError) {
-        return validationError
+      try {
+        const validationError = field.validator(value)
+        if (validationError) {
+          return validationError
+        }
+      } catch (error) {
+        console.error('Error in field validation:', error)
+        return 'Error en la validación'
       }
     }
 
@@ -84,6 +100,8 @@ export const FormModal = ({
   }
 
   const handleChange = (field, value) => {
+    if (!field) return;
+
     // First update the form data
     const updatedFormData = {
       ...formData,
@@ -93,10 +111,10 @@ export const FormModal = ({
     setFormData(updatedFormData)
 
     // Find the field config from fields array
-    const fieldConfig = fields.find(f => f.id === field)
+    const fieldConfig = fields?.find(f => f?.id === field)
     
     // If field has validateOnChange, validate it immediately
-    if (fieldConfig && fieldConfig.validateOnChange) {
+    if (fieldConfig?.validateOnChange) {
       const error = validateField(fieldConfig, value)
       setErrors(prev => ({
         ...prev,
@@ -111,13 +129,19 @@ export const FormModal = ({
     }
     
     // Handle any custom onChange logic for the field
-    if (fieldConfig && fieldConfig.onChange) {
-      fieldConfig.onChange(value, updatedFormData, (fieldId, fieldValue) => {
-        setFormData(prev => ({
-          ...prev,
-          [fieldId]: fieldValue
-        }))
-      })
+    if (fieldConfig?.onChange) {
+      try {
+        fieldConfig.onChange(value, updatedFormData, (fieldId, fieldValue) => {
+          if (fieldId) {
+            setFormData(prev => ({
+              ...prev,
+              [fieldId]: fieldValue
+            }))
+          }
+        })
+      } catch (error) {
+        console.error('Error in onChange handler:', error)
+      }
     }
   }
 
@@ -125,11 +149,17 @@ export const FormModal = ({
     const newErrors = {}
     let isValid = true
 
+    if (!fields?.length) {
+      return true
+    }
+
     fields.forEach((field) => {
-      const error = validateField(field, formData[field.id])
-      if (error) {
-        newErrors[field.id] = error
-        isValid = false
+      if (field?.id) {
+        const error = validateField(field, formData[field.id])
+        if (error) {
+          newErrors[field.id] = error
+          isValid = false
+        }
       }
     })
 
@@ -139,12 +169,21 @@ export const FormModal = ({
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (validateForm()) {
-      onSubmit(formData)
+    try {
+      if (validateForm()) {
+        if (typeof onSubmit === 'function') {
+          onSubmit(formData)
+        } else {
+          console.error('onSubmit is not a function')
+        }
+      }
+    } catch (error) {
+      console.error('Error in form submission:', error)
     }
   }
 
   const renderField = (field) => {
+    if (!field || !field.id || !field.type) return null;
     switch (field.type) {
       case "switch":
         return (
@@ -295,7 +334,7 @@ export const FormModal = ({
               variant="outlined"
               placeholder={field.placeholder || ""}
               error={!!errors[field.id]}
-              helperText={errors[field.id]}
+              helperText={errors[field.id] || (typeof field.helperText === 'function' ? field.helperText(formData) : field.helperText)}
               disabled={field.disabled}
               InputProps={{
                 inputProps: {
@@ -369,6 +408,14 @@ export const FormModal = ({
           </Box>
         )
 
+      case "custom":
+        return (
+          <Box key={field.id} sx={{ mb: 2 }}>
+            {field.render ? field.render(formData[field.id], (value) => handleChange(field.id, value), formData) : null}
+            {errors[field.id] && <FormHelperText error>{errors[field.id]}</FormHelperText>}
+          </Box>
+        )
+
       default:
         return (
           <Box key={field.id} sx={{ mb: 1 }}>
@@ -384,7 +431,7 @@ export const FormModal = ({
               variant="outlined"
               placeholder={field.placeholder || ""}
               error={!!errors[field.id]}
-              helperText={errors[field.id]}
+              helperText={errors[field.id] || (typeof field.helperText === 'function' ? field.helperText(formData) : field.helperText)}
               multiline={field.multiline}
               rows={field.rows || 1}
               disabled={field.disabled}
@@ -405,14 +452,14 @@ export const FormModal = ({
   }
 
   // Agrupar campos por secciones si están definidas
-  const groupedFields = fields.reduce((acc, field) => {
-    const section = field.section || "default"
+  const groupedFields = fields?.reduce((acc, field) => {
+    const section = field?.section || "default"
     if (!acc[section]) {
       acc[section] = []
     }
     acc[section].push(field)
     return acc
-  }, {})
+  }, {}) || { default: [] }
 
   return (
     <Dialog
@@ -420,6 +467,8 @@ export const FormModal = ({
       onClose={onClose}
       maxWidth="md"
       fullWidth
+      disableEscapeKeyDown={true}
+      onBackdropClick={() => {}} // Prevenir cierre al hacer clic fuera
       PaperProps={{
         sx: {
           borderRadius: "8px",
@@ -454,37 +503,37 @@ export const FormModal = ({
             p: 1,
             '& .MuiBox-root': { mb: 0.75 },
             '& .MuiTypography-root': { 
-              fontSize: '0.75rem',  // Reduced from 0.875rem
+              fontSize: '0.75rem',
               color: '#555',
-              mb: 0.25,            // Reduced from 0.5
+              mb: 0.25,
               fontWeight: 500
             },
             '& .MuiFormControl-root': { 
-              mb: 0.5,             // Reduced from 0.75
+              mb: 0.5,
               '& .MuiInputBase-root': {
-                minHeight: '30px',  // Reduced from 32px
-                fontSize: '0.75rem' // Reduced from 0.875rem
+                minHeight: '30px',
+                fontSize: '0.75rem'
               }
             },
             '& .MuiTextField-root': {
               '& .MuiInputBase-root': {
-                height: '30px',     // Reduced from 32px
-                fontSize: '0.75rem' // Reduced from 0.875rem
+                height: '30px',
+                fontSize: '0.75rem'
               }
             },
             '& .MuiSelect-select': {
-              height: '30px !important',    // Reduced from 32px
-              minHeight: '30px !important', // Reduced from 32px
-              fontSize: '0.75rem',          // Reduced from 0.875rem
-              padding: '2px 8px'            // Reduced padding
+              height: '30px !important',
+              minHeight: '30px !important',
+              fontSize: '0.75rem',
+              padding: '2px 8px'
             },
             '& .MuiFormControlLabel-root': {
               marginLeft: 0,
               marginRight: 0,
-              minHeight: '30px'    // Reduced from 32px
+              minHeight: '30px'
             },
             '& .MuiFormControlLabel-label': {
-              fontSize: '0.75rem'  // Reduced from 0.875rem
+              fontSize: '0.75rem'
             },
             '& .MuiFormHelperText-root': {
               marginTop: 0,
@@ -494,9 +543,9 @@ export const FormModal = ({
         >
           <Grid container spacing={1}>
             {fields
-              .filter(field => field.id !== 'programacion') // Remove programacion field
+              ?.filter(field => field?.id !== 'programacion')
               .map((field) => (
-                <Grid item xs={12} sm={field.fullWidth ? 12 : 6} key={field.id}>
+                <Grid item xs={12} sm={field?.fullWidth ? 12 : 6} key={field?.id}>
                   {renderField(field)}
                 </Grid>
               ))}
@@ -518,6 +567,23 @@ export const FormModal = ({
           >
             Cancelar
           </Button>
+          {initialData && initialData._id && title && title.includes('Usuario') && (
+            <Button
+              onClick={() => onClose('assignRoles')}
+              variant="contained"
+              size="small"
+              sx={{ 
+                borderRadius: "4px", 
+                px: 2,
+                py: 0.5,
+                fontSize: '0.875rem',
+                bgcolor: "#0455a2",
+                minHeight: '30px'
+              }}
+            >
+              Asignar Roles
+            </Button>
+          )}
           <Button
             type="submit"
             variant="contained"

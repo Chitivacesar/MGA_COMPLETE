@@ -142,7 +142,7 @@ const VentaCursosFormNew = ({ open, onClose, onSubmit }) => {
   // Manejar cambio de número de clases
   const handleNumeroClasesChange = (event) => {
     const value = event.target.value;
-    if (value === '' || (Number(value) >= 1 && Number(value) <= 99)) {
+    if (value === '' || (Number(value) >= 1 && Number(value) <= 720)) {
       setFormData(prev => ({ ...prev, numero_de_clases: value }));
       calcularValorTotal(value, valorPorHora);
     }
@@ -163,7 +163,7 @@ const VentaCursosFormNew = ({ open, onClose, onSubmit }) => {
     }));
   };
 
-  // Validar formulario
+  // Validar formulario con reglas de negocio
   const validateForm = () => {
     if (!formData.beneficiarioId) {
       showError('Debe seleccionar un beneficiario');
@@ -173,12 +173,12 @@ const VentaCursosFormNew = ({ open, onClose, onSubmit }) => {
       showError('Debe seleccionar un curso');
       return false;
     }
-    if (!formData.numero_de_clases || formData.numero_de_clases < 1) {
-      showError('Debe ingresar un número válido de clases');
+    if (!formData.numero_de_clases || formData.numero_de_clases < 1 || formData.numero_de_clases > 720) {
+      showError('Debe ingresar un número válido de clases (1-720)');
       return false;
     }
-    if (!formData.fechaInicio || !formData.fechaFin) {
-      showError('Debe seleccionar las fechas');
+    if (!formData.fechaInicio) {
+      showError('Debe seleccionar una fecha de inicio');
       return false;
     }
     return true;
@@ -188,12 +188,28 @@ const VentaCursosFormNew = ({ open, onClose, onSubmit }) => {
   const handleSubmit = async () => {
     if (!validateForm()) return;
 
+    // Generar datos para enviar al backend
+    const dataToSend = {
+      ...formData,
+      codigoVenta: formData.codigoVenta && formData.codigoVenta.trim() !== '' ? formData.codigoVenta : `AUTO-${Date.now()}`,
+      consecutivo: formData.consecutivo && formData.consecutivo.trim() !== '' ? Number(formData.consecutivo) : Date.now(), // Convertir a número
+      valor_total: formData.numero_de_clases * valorPorHora, // Cálculo automático
+      fechaFin: addMonths(formData.fechaInicio, 1) // Fecha fin calculada automáticamente
+    };
+
+    console.log('Datos enviados al servidor:', dataToSend);
+
     try {
-      const response = await axios.post('http://localhost:3000/api/ventas', formData);
+      const response = await axios.post('http://localhost:3000/api/ventas', dataToSend);
+      console.log('Respuesta del servidor:', response.data);
+      showSuccess('Venta creada exitosamente');
       onSubmit(response.data);
       onClose();
     } catch (error) {
       console.error('Error al crear la venta:', error);
+      if (error.response) {
+        console.error('Detalles del error:', error.response.data);
+      }
       showError('Error al crear la venta: ' + error.message);
     }
   };
@@ -282,9 +298,10 @@ const VentaCursosFormNew = ({ open, onClose, onSubmit }) => {
                 value={formData.numero_de_clases}
                 onChange={handleNumeroClasesChange}
                 type="number"
-                inputProps={{ min: 1, max: 99 }}
+                inputProps={{ min: 1, max: 720 }}
                 size="small"
                 fullWidth
+                helperText="Máximo 720 clases (horas máximas por mes)"
               />
             </Grid>
             <Grid item xs={12} md={4}>

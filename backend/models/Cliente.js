@@ -9,8 +9,8 @@ const clienteSchema = new mongoose.Schema({
   correo: { type: String },
   direccion: { type: String },
   fechaNacimiento: { type: Date },
-  estado: { type: Boolean, default: true },
-  // Otros campos según tu modelo
+  estado: { type: Boolean, default: true }
 });
 
-module.exports = mongoose.model('Cliente', clienteSchema);
+// Especificar el nombre de la colección explícitamente
+module.exports = mongoose.model('Cliente', clienteSchema, 'clientes');

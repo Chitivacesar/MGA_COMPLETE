@@ -50,6 +50,7 @@ export const GenericList = ({
   title,
   pagination,
   customFilters = {}, // New prop for custom filters
+  customActions = [], // New prop for custom actions
 }) => {
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(5)
@@ -285,6 +286,37 @@ export const GenericList = ({
               Crear Nuevo
             </Button>
           )}
+          
+          {/* Render custom actions */}
+          {customActions.map((action, index) => (
+            <Button
+              key={index}
+              variant="contained"
+              onClick={action.onClick}
+              sx={{
+                backgroundColor: action.color === 'success' ? "#2e7d32" : 
+                                action.color === 'error' ? "#d32f2f" :
+                                action.color === 'warning' ? "#ed6c02" :
+                                "#0455a2",
+                color: "white",
+                textTransform: "none",
+                fontFamily: '"Inter", sans-serif',
+                fontSize: "0.875rem",
+                fontWeight: 500,
+                px: 2,
+                py: 0.75,
+                borderRadius: 1,
+                "&:hover": {
+                  backgroundColor: action.color === 'success' ? "#1b5e20" : 
+                                  action.color === 'error' ? "#b71c1c" :
+                                  action.color === 'warning' ? "#e65100" :
+                                  "#034089",
+                },
+              }}
+            >
+              {action.label}
+            </Button>
+          ))}
         </Box>
       </Box>
 

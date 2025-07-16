@@ -3,7 +3,7 @@ import axios from 'axios';
 import { GenericList } from '../../../shared/components/GenericList';
 import { DetailModal } from '../../../shared/components/DetailModal';
 import { FormModal } from '../../../shared/components/FormModal';
-import { StatusButton } from '../../../shared/components/StatusButton';
+import { StatusButton } from '../../../shared/components/StatusButton.jsx';
 import { PictureAsPdf as PdfIcon } from '@mui/icons-material';
 import { Box, Typography, Grid } from '@mui/material';
 import * as XLSX from 'xlsx';
@@ -178,7 +178,7 @@ const Pagos = () => {
     setSelectedPayment(null);
   };
 
-  // Columnas actualizadas para mostrar Beneficiario y Cliente
+  // Columnas actualizadas - removida la columna cliente
   const columns = [
     {
       id: 'beneficiario',
@@ -186,14 +186,6 @@ const Pagos = () => {
       render: (value, row) => {
         const beneficiario = getBeneficiarioInfo(row);
         return formatearNombreCompleto(beneficiario);
-      }
-    },
-    {
-      id: 'cliente',
-      label: 'Cliente',
-      render: (value, row) => {
-        const cliente = getClienteInfo(row);
-        return formatearNombreCompleto(cliente);
       }
     },
     {
@@ -238,8 +230,10 @@ const Pagos = () => {
         
         // ACTUALIZADO: Usar la función auxiliar corregida
         const beneficiario = getBeneficiarioInfo(data);
+        const cliente = getClienteInfo(data);  // Añadir esta línea
         const beneficiarioNombre = formatearNombreCompleto(beneficiario);
         
+        // Modificación en el render del detalle para incluir información del cliente
         return (
           <Box sx={{ 
             width: '100%',
@@ -265,14 +259,13 @@ const Pagos = () => {
               </Grid>
             </Grid>
             
-            {/* Información del beneficiario - ACTUALIZADO */}
+            {/* Información del beneficiario y cliente */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
-              <Grid item xs={12}>
+              <Grid item xs={6}>
                 <Box sx={{ p: 2, backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
                   <Typography variant="subtitle2" sx={{ color: '#666', mb: 1 }}>Beneficiario:</Typography>
                   <Typography variant="body1" sx={{ fontWeight: 500 }}>{beneficiarioNombre}</Typography>
                   
-                  {/* ACTUALIZADO: Usar campos correctos según el modelo */}
                   {beneficiario?.telefono && (
                     <Typography variant="body2" sx={{ color: '#666', mt: 1 }}>
                       Teléfono: {beneficiario.telefono}
@@ -288,21 +281,42 @@ const Pagos = () => {
                       Documento: {beneficiario.documento}
                     </Typography>
                   )}
-                  {/* Campos adicionales del modelo corregido */}
                   {beneficiario?.tipo_de_documento && (
                     <Typography variant="body2" sx={{ color: '#666' }}>
                       Tipo de Documento: {beneficiario.tipo_de_documento}
                     </Typography>
                   )}
-                  {beneficiario?.direccion && (
-                    <Typography variant="body2" sx={{ color: '#666' }}>
-                      Dirección: {beneficiario.direccion}
-                    </Typography>
-                  )}
-                  {beneficiario?.fechaDeNacimiento && (
-                    <Typography variant="body2" sx={{ color: '#666' }}>
-                      Fecha de Nacimiento: {new Date(beneficiario.fechaDeNacimiento).toLocaleDateString('es-CO')}
-                    </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6}>
+                <Box sx={{ p: 2, backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
+                  <Typography variant="subtitle2" sx={{ color: '#666', mb: 1 }}>Cliente:</Typography>
+                  {cliente ? (
+                    <>
+                      <Typography variant="body1" sx={{ fontWeight: 500 }}>{formatearNombreCompleto(cliente)}</Typography>
+                      {cliente.telefono && (
+                        <Typography variant="body2" sx={{ color: '#666', mt: 1 }}>
+                          Teléfono: {cliente.telefono}
+                        </Typography>
+                      )}
+                      {cliente.email && (
+                        <Typography variant="body2" sx={{ color: '#666' }}>
+                          Email: {cliente.email}
+                        </Typography>
+                      )}
+                      {cliente.documento && (
+                        <Typography variant="body2" sx={{ color: '#666' }}>
+                          Documento: {cliente.documento}
+                        </Typography>
+                      )}
+                      {cliente.tipo_de_documento && (
+                        <Typography variant="body2" sx={{ color: '#666' }}>
+                          Tipo de Documento: {cliente.tipo_de_documento}
+                        </Typography>
+                      )}
+                    </>
+                  ) : (
+                    <Typography variant="body2" sx={{ color: '#666' }}>No disponible</Typography>
                   )}
                 </Box>
               </Grid>
@@ -485,9 +499,30 @@ const Pagos = () => {
       console.log('API Response:', response.data);
       
       if (response.data && response.data.success) {
-        const pagosFormateados = response.data.data.map(pago => ({
+        // Primero, agrupamos los pagos por ID de beneficiario
+        const pagosPorBeneficiario = response.data.data.reduce((acc, pago) => {
+          const beneficiarioId = pago.ventas?.beneficiario?._id;
+          if (!beneficiarioId) return acc;
+      
+          if (!acc[beneficiarioId]) {
+            acc[beneficiarioId] = {
+              ...pago,
+              ventas: {
+                ...pago.ventas,
+                valor_total: 0
+              }
+            };
+          }
+          
+          // Sumamos el valor_total de cada venta
+          acc[beneficiarioId].ventas.valor_total += pago.ventas?.valor_total || 0;
+          return acc;
+        }, {});
+    
+        // Convertimos el objeto agrupado en un array
+        const pagosFormateados = Object.values(pagosPorBeneficiario).map(pago => ({
           ...pago,
-          valor_total: pago.ventas?.valor_total || 0, // Usar el valor_total de la venta
+          valor_total: pago.ventas?.valor_total || 0,
           valorTotal: pago.ventas?.valor_total || 0,
           porcentajePagado: pago.ventas?.valor_total ? (pago.valor_total / pago.ventas.valor_total) * 100 : 0
         }));
@@ -685,8 +720,7 @@ const Pagos = () => {
         columns={columns}
         rowKey="_id" // Asegurarse de que esta prop esté presente
         onView={handleView}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
+
         onExportPdf={handleExportExcel}
         title="Gestión de Pagos"
       />

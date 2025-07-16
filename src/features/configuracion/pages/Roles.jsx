@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { GenericList2 } from "../../../shared/components/genericlist2";
-import { DetailModal } from '../../../shared/components/DetailModal';
+import { DetailModal2 } from '../../../shared/components/DetailModal2';
 import { StatusButton } from '../../../shared/components/StatusButton';
 import { FormModal } from '../../../shared/components/formModal2';
 import { SuccessAlert } from '../../../shared/components/SuccessAlert';
@@ -24,7 +24,7 @@ const Roles = () => {
   // Función para obtener las relaciones rol-permiso-privilegio
   const fetchRolPermisoPrivilegio = async () => {
     try {
-      const response = await axios.get('http://localhost:3000/api/rol-permiso-privilegios?populate=rolId,permisoId,privilegioId');
+      const response = await axios.get('http://localhost:3000/api/rol_permiso_privilegio?populate=rolId,permisoId,privilegioId');
       console.log('Relaciones rol-permiso-privilegio cargadas:', response.data);
       setRolPermisoPrivilegio(response.data);
     } catch (error) {
@@ -91,9 +91,14 @@ const Roles = () => {
         
         if (permisoForm.descargar) {
           const privilegioDescargar = privilegiosDisponibles.find(p => 
-            p.nombre_privilegio === 'Descargar' || p.nombre === 'Descargar'
+            p.nombre_privilegio === 'Descargar' || p.nombre === 'Descargar' ||
+            p.nombre_privilegio === 'Download' || p.nombre === 'Download'
           );
-          if (privilegioDescargar?._id) privilegiosIds.push(privilegioDescargar._id);
+          if (privilegioDescargar?._id) {
+            privilegiosIds.push(privilegioDescargar._id);
+          } else {
+            console.warn('No se encontró el privilegio "Descargar" en la lista de privilegios disponibles');
+          }
         }
       }
     });
@@ -139,12 +144,58 @@ const Roles = () => {
     return Object.values(permisosConPrivilegios);
   };
 
+  // Nueva función para preparar los datos iniciales del formulario cuando se edita
+  const prepararDatosIniciales = (rol) => {
+    if (!rol || !rol._id) return rol;
+
+    // Obtener permisos y privilegios del rol
+    const permisosPrivilegiosDelRol = getPermisosPrivilegiosDelRol(rol._id);
+    console.log('Permisos y privilegios del rol:', permisosPrivilegiosDelRol);
+    
+    // Crear un mapa para acceso rápido
+    const permisoPrivilegioMap = {};
+    permisosPrivilegiosDelRol.forEach(item => {
+      const nombreModulo = item.permiso?.permiso || item.permiso?.nombre;
+      if (nombreModulo) {
+        permisoPrivilegioMap[nombreModulo] = item.privilegios.map(p => 
+          p.nombre_privilegio || p.nombre
+        );
+      }
+    });
+
+    console.log('Mapa de permisos-privilegios:', permisoPrivilegioMap);
+
+    // Generar los datos de permisos para el formulario
+    const permisosFormulario = permisos.map(permiso => {
+      const nombreModulo = permiso.permiso || permiso.nombre;
+      const privilegiosDelModulo = permisoPrivilegioMap[nombreModulo] || [];
+      
+      console.log(`Módulo: ${nombreModulo}, Privilegios: ${privilegiosDelModulo.join(', ')}`);
+      
+      return {
+        modulo: nombreModulo,
+        ver: privilegiosDelModulo.includes('Ver'),
+        crear: privilegiosDelModulo.includes('Crear'),
+        editar: privilegiosDelModulo.includes('Editar'),
+        eliminar: privilegiosDelModulo.includes('Eliminar'),
+        descargar: privilegiosDelModulo.includes('Descargar') || privilegiosDelModulo.includes('Download')
+      };
+    });
+
+    console.log('Datos de permisos preparados para el formulario:', permisosFormulario);
+
+    return {
+      ...rol,
+      permisos: permisosFormulario
+    };
+  };
+
   // Función para obtener los roles
   const fetchRoles = async () => {
     try {
       const response = await axios.get('http://localhost:3000/api/roles?populate=permisos,privilegios');
       console.log('Roles cargados:', response.data);
-      setRoles(response.data);
+      setRoles(response.data.roles || response.data || []); // Manejar diferentes estructuras de respuesta
     } catch (error) {
       console.error('Error al cargar roles:', error);
       setAlert({
@@ -170,6 +221,20 @@ const Roles = () => {
     try {
       const response = await axios.get('http://localhost:3000/api/privilegios');
       console.log('Privilegios (acciones) cargados:', response.data);
+      
+      // Verificar si existe el privilegio "Descargar"
+      const privilegioDescargar = response.data.find(p => 
+        p.nombre_privilegio === 'Descargar' || p.nombre === 'Descargar' ||
+        p.nombre_privilegio === 'Download' || p.nombre === 'Download'
+      );
+      
+      if (!privilegioDescargar) {
+        console.warn('⚠️ ADVERTENCIA: No se encontró el privilegio "Descargar" en la base de datos');
+        console.log('Privilegios disponibles:', response.data.map(p => p.nombre_privilegio || p.nombre));
+      } else {
+        console.log('✅ Privilegio "Descargar" encontrado:', privilegioDescargar);
+      }
+      
       setPrivilegios(response.data);
     } catch (error) {
       console.error('Error al cargar privilegios:', error);
@@ -221,27 +286,6 @@ const Roles = () => {
         open: true,
         message: 'Error al actualizar el estado'
       });
-    }
-  };
-
-  // Función para eliminar un rol
-  const handleDelete = async (rol) => {
-    const confirmDelete = window.confirm(`¿Está seguro de eliminar el rol ${rol.nombre}?`);
-    if (confirmDelete) {
-      try {
-        await axios.delete(`http://localhost:3000/api/roles/${rol._id}`);
-        await fetchRoles();
-        setAlert({
-          open: true,
-          message: 'Rol eliminado correctamente'
-        });
-      } catch (error) {
-        console.error('Error al eliminar rol:', error);
-        setAlert({
-          open: true,
-          message: 'Error al eliminar el rol'
-        });
-      }
     }
   };
 
@@ -441,7 +485,9 @@ const Roles = () => {
   // Funciones auxiliares para manejar modales
   const handleEdit = (rol) => {
     setIsEditing(true);
-    setSelectedRol(rol);
+    // Preparar datos iniciales con permisos pre-seleccionados
+    const rolConPermisos = prepararDatosIniciales(rol);
+    setSelectedRol(rolConPermisos);
     setFormModalOpen(true);
   };
 
@@ -491,44 +537,57 @@ const Roles = () => {
     { id: 'estado', label: 'Estado', render: (value) => <StatusButton active={value === true} /> },
     { 
       id: 'permisos_privilegios', 
-      label: 'Permisos y Privilegios',
+      label: 'Permisos',
       render: (value, data) => {
         if (!data._id) return 'No hay permisos asignados';
         
         const permisosPrivilegios = getPermisosPrivilegiosDelRol(data._id);
         
-        if (permisosPrivilegios.length === 0) {
-          return 'No hay permisos asignados';
-        }
-        
         return (
-          <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-            {permisosPrivilegios.map((item, index) => (
-              <div key={index} style={{ marginBottom: '15px', padding: '10px', border: '1px solid #e0e0e0', borderRadius: '5px' }}>
-                <strong style={{ color: '#2c3e50', fontSize: '14px' }}>
-                  {item.permiso?.permiso || item.permiso?.nombre || 'Permiso sin nombre'}
-                </strong>
-                <div style={{ marginTop: '5px', paddingLeft: '10px' }}>
-                  {item.privilegios.map((privilegio, privIndex) => (
-                    <span 
-                      key={privIndex}
-                      style={{ 
-                        display: 'inline-block',
-                        backgroundColor: '#3498db',
-                        color: 'white',
-                        padding: '2px 8px',
-                        borderRadius: '12px',
-                        fontSize: '12px',
-                        marginRight: '5px',
-                        marginBottom: '3px'
-                      }}
-                    >
-                      {privilegio.nombre_privilegio || privilegio.nombre}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
+          <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                  <th style={{ padding: '12px', textAlign: 'left', width: '280px' }}>Módulo</th>
+                  <th style={{ padding: '12px', textAlign: 'center', width: '120px' }}>Ver</th>
+                  <th style={{ padding: '12px', textAlign: 'center', width: '120px' }}>Crear</th>
+                  <th style={{ padding: '12px', textAlign: 'center', width: '120px' }}>Editar</th>
+                  <th style={{ padding: '12px', textAlign: 'center', width: '120px' }}>Eliminar</th>
+                  <th style={{ padding: '12px', textAlign: 'center', width: '120px' }}>Descargar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {permisos.map((permiso, index) => {
+                  const permisoInfo = permisosPrivilegios.find(item => 
+                    item.permiso?._id === permiso._id
+                  );
+                  const privilegiosDelPermiso = permisoInfo?.privilegios || [];
+                  
+                  const tienePrivilegio = (nombrePrivilegio) => {
+                    return privilegiosDelPermiso.some(priv => 
+                      (priv.nombre_privilegio || priv.nombre) === nombrePrivilegio
+                    );
+                  };
+
+                  return (
+                    <tr key={index} style={{ borderBottom: '1px solid #dee2e6' }}>
+                      <td style={{ padding: '12px', color: '#2c3e50' }}>
+                        {permiso.permiso || permiso.nombre}
+                      </td>
+                      {['Ver', 'Crear', 'Editar', 'Eliminar', 'Descargar'].map((priv, i) => (
+                        <td key={i} style={{ padding: '12px', textAlign: 'center' }}>
+                          {tienePrivilegio(priv) ? (
+                            <span style={{ color: '#2196f3', fontWeight: 'bold' }}>✓</span>
+                          ) : (
+                            <span style={{ color: '#e74c3c', fontWeight: 'bold' }}>✗</span>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         );
       }
@@ -561,13 +620,25 @@ const Roles = () => {
       label: 'Permisos',
       type: 'table',
       required: true,
+      // Configuración mejorada para tabla más grande
+      tableConfig: {
+        maxHeight: '70vh',      // 70% de la altura de la ventana
+        modalSize: 'fullscreen', // Tamaño de pantalla completa
+        minWidth: '100%',       // Ancho completo
+        containerStyle: {
+          padding: '20px',
+          maxHeight: '70vh',    // 70% de la altura de la ventana
+          overflowY: 'auto',    // Scroll vertical si es necesario
+          overflowX: 'auto'     // Scroll horizontal si es necesario
+        }
+      },
       columns: [
-        { id: 'modulo', label: 'Módulo' },
-        { id: 'ver', label: 'Ver', type: 'checkbox' },
-        { id: 'crear', label: 'Crear', type: 'checkbox' },
-        { id: 'editar', label: 'Editar', type: 'checkbox' },
-        { id: 'eliminar', label: 'Eliminar', type: 'checkbox' },
-        { id: 'descargar', label: 'Descargar', type: 'checkbox' }
+        { id: 'modulo', label: 'Módulo', width: '280px' },      // Ancho aumentado
+        { id: 'ver', label: 'Ver', type: 'checkbox', width: '120px' },
+        { id: 'crear', label: 'Crear', type: 'checkbox', width: '120px' },
+        { id: 'editar', label: 'Editar', type: 'checkbox', width: '120px' },
+        { id: 'eliminar', label: 'Eliminar', type: 'checkbox', width: '120px' },
+        { id: 'descargar', label: 'Descargar', type: 'checkbox', width: '120px' }
       ],
       // Usar los permisos (módulos) para generar las filas
       rows: permisos.length > 0 ? permisos.map(permiso => ({
@@ -598,20 +669,36 @@ const Roles = () => {
   return (
     <>
       <GenericList2
-        data={roles}
+        data={roles || []} // Asegurarse de que siempre sea un array
         columns={columns}
         onEdit={handleEdit}
-        onDelete={handleDelete}
         onView={handleView}
         title="Gestión de Roles"
+        // Removido: onDelete={handleDelete}
       />
       
-      <DetailModal
+      <DetailModal2
         title={`Detalle del Rol ${selectedRol?.nombre || ''}`}
         data={selectedRol}
         fields={detailFields}
         open={detailModalOpen}
         onClose={handleCloseDetail}
+        modalProps={{
+          maxWidth: false,
+          fullWidth: true,
+          PaperProps: {
+            style: {
+              width: '98vw',
+              height: '98vh',
+              maxWidth: 'none',
+              maxHeight: 'none',
+              margin: '1vh auto',
+              borderRadius: '12px',
+              padding: '0',
+              overflow: 'hidden'
+            }
+          }
+        }}
       />
 
       <FormModal
@@ -621,6 +708,23 @@ const Roles = () => {
         open={formModalOpen}
         onClose={handleCloseForm}
         onSubmit={handleSubmit}
+        // Configuración para modal mucho más grande
+        modalProps={{
+          maxWidth: false,     // Eliminar restricción de ancho máximo
+          fullWidth: true,
+          PaperProps: {
+            style: {
+              width: '98vw',          // 98% del ancho de la ventana
+              height: '98vh',         // 98% de la altura de la ventana
+              maxWidth: 'none',       // Sin límite de ancho máximo
+              maxHeight: 'none',      // Sin límite de altura máxima
+              margin: '1vh auto',     // Centrado con margen muy pequeño
+              borderRadius: '12px',   // Esquinas redondeadas
+              padding: '0',           // Sin padding adicional
+              overflow: 'hidden'      // Evitar overflow
+            }
+          }
+        }}
       />
       
       <SuccessAlert

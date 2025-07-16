@@ -1,5 +1,6 @@
 
 
+
 import { useState, useEffect } from 'react';
 import { 
   Dialog, 
@@ -87,6 +88,8 @@ export const UserRoleAssignment = ({
       onClose={onClose} 
       maxWidth="sm" 
       fullWidth
+      disableEscapeKeyDown={true}
+      onBackdropClick={() => {}} // Prevenir cierre al hacer clic fuera
       PaperProps={{
         sx: {
           borderRadius: '12px',
@@ -127,21 +130,22 @@ export const UserRoleAssignment = ({
           </TableRow>
         </TableHead>
         <TableBody>
-          {roles && roles.length > 0 ? roles.map((role) => {
-            console.log('Renderizando rol:', role);
-            return (
-              <TableRow key={role._id}>
-                <TableCell padding="checkbox">
-                  <Checkbox
-                    checked={selectedRoles.includes(role._id)}
-                    onChange={() => handleToggleRole(role._id)}
-                  />
-                </TableCell>
-                <TableCell>{role.nombre}</TableCell>
-                <TableCell>{role.descripcion}</TableCell>
-              </TableRow>
-            );
-          }) : (
+          {roles && roles.length > 0 ? roles
+            .map((role) => {
+              console.log('Renderizando rol:', role);
+              return (
+                <TableRow key={role._id}>
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      checked={selectedRoles.includes(role._id)}
+                      onChange={() => handleToggleRole(role._id)}
+                    />
+                  </TableCell>
+                  <TableCell>{role.nombre}</TableCell>
+                  <TableCell>{role.descripcion}</TableCell>
+                </TableRow>
+              );
+            }) : (
             <TableRow>
               <TableCell colSpan={3} align="center">
                 {roles ? 'No hay roles disponibles' : 'Cargando roles...'}

@@ -31,6 +31,10 @@ const pagoSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Venta',
     required: true
+  },
+  clienteId: {
+    type: String,
+    required: true
   }
 }, {
   timestamps: true,
@@ -52,7 +56,8 @@ pagoSchema.virtual('beneficiario').get(function() {
       apellido: this.ventas.beneficiarioId.apellido || 'Sin apellido',
       email: this.ventas.beneficiarioId.email || 'Sin email',
       documento: this.ventas.beneficiarioId.documento || 'Sin documento',
-      telefono: this.ventas.beneficiarioId.telefono || 'Sin teléfono'
+      telefono: this.ventas.beneficiarioId.telefono || 'Sin teléfono',
+      clienteId: this.ventas.beneficiarioId.clienteId || 'Sin cliente'
     };
   }
   return null;

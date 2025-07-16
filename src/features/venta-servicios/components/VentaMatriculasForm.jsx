@@ -1,9 +1,9 @@
 "use client"
-
-import React from "react"
 import { useState, useEffect } from "react"
 import {
   Dialog,
+  Checkbox,
+  FormControlLabel,
   DialogTitle,
   DialogContent,
   DialogActions,
@@ -35,15 +35,12 @@ import {
   Person as PersonIcon,
   School as SchoolIcon,
   EventNote as EventNoteIcon,
-  ArrowForward as ArrowForwardIcon,
   Close as CloseIcon,
-  CheckCircle as CheckCircleIcon,
   Search as SearchIcon,
-  CalendarMonth as CalendarIcon,
   AttachMoney as AttachMoneyIcon,
 } from "@mui/icons-material"
 
-const VentaMatriculasForm = ({
+export const VentaMatriculasForm = ({
   open,
   onClose,
   onSubmit,
@@ -51,15 +48,27 @@ const VentaMatriculasForm = ({
   clientes,
   beneficiarios,
   matriculas,
-  cursosDisponibles, // Recibir la prop aquí
+  cursosDisponibles,
   setClientes,
   setBeneficiarios,
   initialData = null,
+  ventasOriginales = [],
 }) => {
-  // Estados para los pasos del formulario
+  const [clienteEsBeneficiario, setClienteEsBeneficiario] = useState(false)
   const [activeStep, setActiveStep] = useState(0)
   const [transition, setTransition] = useState("slideLeft")
   const [alertMessage, setAlertMessage] = useState({ show: false, message: "", severity: "info" })
+
+  // Definir los pasos del formulario - condicional para curso
+  const getSteps = () => {
+    const baseSteps = ["Datos del Cliente", "Datos del Beneficiario", "Datos de la Matrícula"]
+    if (!isEditing) {
+      baseSteps.push("Datos del Curso")
+    }
+    return baseSteps
+  }
+
+  const steps = getSteps()
 
   // Estados para los datos del formulario
   const [clienteData, setClienteData] = useState({
@@ -72,8 +81,6 @@ const VentaMatriculasForm = ({
     age: "",
     direccion: "",
     telefono: "",
-    correo: "",
-    acudiente: "",
     estado: true,
   })
 
@@ -88,8 +95,9 @@ const VentaMatriculasForm = ({
     direccion: "",
     telefono: "",
     correo: "",
-    acudiente: "",
     estado: true,
+    password: "",
+    confirmPassword: "",
   })
 
   const [matriculaData, setMatriculaData] = useState({
@@ -98,17 +106,18 @@ const VentaMatriculasForm = ({
     beneficiario: "",
     fechaInicio: "",
     fechaFin: "",
-    valor: "",
+    matriculaId: "",
+    valor: "0",
     descuento: "0",
-    valorFinal: "",
+    valorFinal: "0",
     observaciones: "",
-    estado: "activa",
+    estado: "vigente",
   })
 
   const [cursoData, setCursoData] = useState({
     id: null,
     curso: "",
-    clases: "",
+    clases: "4",
     valorCurso: "",
     valorTotal: "",
     debe: "",
@@ -144,188 +153,15 @@ const VentaMatriculasForm = ({
     return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase()
   }
 
-  // Inicializar datos si estamos editando
-  useEffect(() => {
-    if (isEditing && initialData) {
-      // Buscar cliente y beneficiario completos
-      const clienteCompleto = clientes.find((c) => `${c.nombre} ${c.apellido}` === initialData.cliente)
-      const beneficiarioCompleto = beneficiarios.find((e) => `${e.nombre} ${e.apellido}` === initialData.beneficiario)
-
-      // Establecer datos
-      if (clienteCompleto) setClienteData(clienteCompleto)
-      if (beneficiarioCompleto) setBeneficiarioData(beneficiarioCompleto)
-
-      setMatriculaData({
-        ...initialData,
-        cliente: clienteCompleto ? `${clienteCompleto.nombre} ${clienteCompleto.apellido}` : initialData.cliente,
-        beneficiario: beneficiarioCompleto
-          ? `${beneficiarioCompleto.nombre} ${beneficiarioCompleto.apellido}`
-          : initialData.beneficiario,
-      })
-
-      setCursoData({
-        curso: initialData.curso || "",
-        clases: initialData.clases || "",
-        valorCurso: initialData.valorCurso || "",
-        valorTotal: initialData.valorTotal || initialData.valorCurso || "",
-        debe: initialData.debe || "",
-        estado: initialData.estado || "debe",
-      })
-    } else {
-      resetFormData()
+  // Función para formatear fechas
+  const formatDateInput = (date) => {
+    if (!date) return ""
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date
+    try {
+      return new Date(date).toISOString().split("T")[0]
+    } catch {
+      return ""
     }
-  }, [isEditing, initialData, clientes, beneficiarios])
-
-  useEffect(() => {
-    // Si hay una matrícula seleccionada (edición), cargar su valor
-    if (isEditing && initialData && initialData.valor) {
-      setMatriculaData((prev) => ({
-        ...prev,
-        valor: initialData.valor.toString(),
-      }))
-    }
-    // Si no, puedes dejar el valor vacío o cargar un valor por defecto
-  }, [isEditing, initialData])
-
-  useEffect(() => {
-    // Valor anual fijo, por ejemplo 350000
-    const VALOR_ANUAL_MATRICULA = 350000
-    if (activeStep === 2 && !matriculaData.valor) {
-      setMatriculaData((prev) => ({
-        ...prev,
-        valor: VALOR_ANUAL_MATRICULA.toString(),
-      }))
-    }
-  }, [activeStep])
-
-  useEffect(() => {
-    if (activeStep === 2) {
-      const hoy = new Date();
-      const fechaInicio = hoy.toISOString().split("T")[0];
-      const fechaFin = new Date(hoy.setFullYear(hoy.getFullYear() + 1)).toISOString().split("T")[0];
-      setMatriculaData((prev) => ({
-        ...prev,
-        fechaInicio: prev.fechaInicio || fechaInicio,
-        fechaFin: prev.fechaFin || fechaFin,
-      }));
-    }
-  }, [activeStep]);
-
-  // Resetear formulario
-  const resetFormData = () => {
-    setClienteData({
-      id: null,
-      nombre: "",
-      apellido: "",
-      tipoDocumento: "CC",
-      numeroDocumento: "",
-      fechaNacimiento: "",
-      age: "",
-      direccion: "",
-      telefono: "",
-      correo: "",
-      acudiente: "",
-      estado: true,
-    })
-
-    setBeneficiarioData({
-      id: null,
-      nombre: "",
-      apellido: "",
-      tipoDocumento: "TI",
-      numeroDocumento: "",
-      fechaNacimiento: "",
-      age: "",
-      direccion: "",
-      telefono: "",
-      correo: "",
-      acudiente: "",
-      estado: true,
-    })
-
-    setMatriculaData({
-      id: null,
-      cliente: "",
-      beneficiario: "",
-      fechaInicio: "",
-      fechaFin: "",
-      valor: "",
-      descuento: "0",
-      valorFinal: "",
-      observaciones: "",
-      estado: "activa",
-    })
-
-    setCursoData({
-      id: null,
-      curso: "",
-      clases: "",
-      valorCurso: "",
-      debe: "",
-      estado: "debe",
-    })
-
-    setClienteSearchTerm("")
-    setBeneficiarioSearchTerm("")
-    setFilteredClientes([])
-    setFilteredBeneficiarios([])
-    setClienteNotFound(false)
-    setBeneficiarioNotFound(false)
-    setClienteCreated(false)
-    setBeneficiarioCreated(false)
-    setShowClienteResults(false)
-    setShowBeneficiarioResults(false)
-    setAlertMessage({ show: false, message: "", severity: "info" })
-    setActiveStep(0)
-  }
-
-  // Manejadores para el formulario multi-paso
-  const handleNext = () => {
-    // Validar datos antes de avanzar
-    if (activeStep === 0 && (!clienteData.nombre || !clienteData.apellido || !clienteData.numeroDocumento)) {
-      setAlertMessage({
-        show: true,
-        message: "Por favor complete los datos del cliente",
-        severity: "error",
-      })
-      return
-    }
-
-    if (activeStep === 1 && (!beneficiarioData.nombre || !beneficiarioData.apellido || !beneficiarioData.numeroDocumento)) {
-      setAlertMessage({
-        show: true,
-        message: "Por favor complete los datos del beneficiario",
-        severity: "error",
-      })
-      return
-    }
-
-    if (activeStep === 3 && !cursoData.curso) {
-      setAlertMessage({
-        show: true,
-        message: "Por favor seleccione un curso",
-        severity: "error",
-      })
-      return
-    }
-
-    setAlertMessage({ show: false, message: "", severity: "info" })
-    setTransition("slideLeft")
-    setActiveStep((prev) => prev + 1)
-
-    // Si avanzamos al paso de matrícula, actualizar datos
-    if (activeStep === 1) {
-      setMatriculaData((prev) => ({
-        ...prev,
-        cliente: `${clienteData.nombre} ${clienteData.apellido}`,
-        beneficiario: `${beneficiarioData.nombre} ${beneficiarioData.apellido}`,
-      }))
-    }
-  }
-
-  const handleBack = () => {
-    setTransition("slideRight")
-    setActiveStep((prev) => prev - 1)
   }
 
   // Función para calcular edad
@@ -342,6 +178,333 @@ const VentaMatriculasForm = ({
     return age
   }
 
+  // Efecto para manejar el checkbox de cliente es beneficiario
+  useEffect(() => {
+    if (!clienteEsBeneficiario) {
+      setBeneficiarioData({
+        id: null,
+        nombre: "",
+        apellido: "",
+        tipoDocumento: "TI",
+        numeroDocumento: "",
+        fechaNacimiento: "",
+        age: "",
+        direccion: "",
+        telefono: "",
+        correo: "",
+        estado: true,
+        password: "",
+        confirmPassword: "",
+      })
+    } else {
+      setBeneficiarioData({
+        ...clienteData,
+        id: null,
+        tipoDocumento: "TI",
+        correo: "",
+        password: "",
+        confirmPassword: "",
+      })
+    }
+  }, [clienteEsBeneficiario, clienteData])
+
+  // Inicializar datos si estamos editando (CORREGIDO)
+  useEffect(() => {
+    if (open) {
+      console.log("Modal abierto, isEditing:", isEditing, "initialData:", initialData)
+
+      // SIEMPRE reiniciar primero cuando se abre el modal
+      resetFormData()
+
+      // Solo cargar datos si estamos editando Y tenemos initialData
+      if (isEditing && initialData) {
+        console.log("Cargando datos para edición:", initialData)
+
+        // Verificar que tenemos los datos necesarios para edición
+        if (!initialData || (!initialData.beneficiarioObj && !initialData._original)) {
+          console.warn("No se encontraron datos del beneficiario para editar")
+          return
+        }
+
+        // Mapear datos del beneficiario
+        let beneficiario = initialData.beneficiarioObj
+        if (!beneficiario && initialData._original) {
+          // Buscar beneficiario usando el beneficiarioId de la venta original
+          beneficiario = beneficiarios.find((b) => String(b._id) === String(initialData._original.beneficiarioId))
+          console.log("Beneficiario encontrado por ID:", beneficiario)
+        }
+
+        if (beneficiario) {
+          console.log("Beneficiario encontrado:", beneficiario)
+
+          // Determinar la relación cliente-beneficiario basado en la lógica correcta
+          const clienteIdStr = String(beneficiario.clienteId || "")
+          const beneficiarioIdStr = String(beneficiario._id)
+
+          console.log("ClienteId:", clienteIdStr, "BeneficiarioId:", beneficiarioIdStr)
+
+          // Cliente es beneficiario si clienteId === _id del beneficiario
+          const esClienteBeneficiario = clienteIdStr === beneficiarioIdStr
+
+          console.log("Es cliente beneficiario:", esClienteBeneficiario)
+          setClienteEsBeneficiario(esClienteBeneficiario)
+
+          // Cargar datos del beneficiario
+          const beneficiarioDataToSet = {
+            id: beneficiario._id,
+            nombre: beneficiario.nombre || "",
+            apellido: beneficiario.apellido || "",
+            tipoDocumento: beneficiario.tipo_de_documento || "TI",
+            numeroDocumento: beneficiario.numero_de_documento || "",
+            fechaNacimiento: formatDateInput(beneficiario.fechaDeNacimiento),
+            age: calculateAge(beneficiario.fechaDeNacimiento),
+            direccion: beneficiario.direccion || "",
+            telefono: beneficiario.telefono || "",
+            correo: beneficiario.correo || "",
+            estado: beneficiario.estado !== undefined ? beneficiario.estado : true,
+            password: "",
+            confirmPassword: "",
+          }
+
+          console.log("Datos del beneficiario a cargar:", beneficiarioDataToSet)
+          setBeneficiarioData(beneficiarioDataToSet)
+
+          if (esClienteBeneficiario) {
+            // Cliente es el mismo beneficiario
+            const clienteDataToSet = {
+              id: beneficiario._id,
+              nombre: beneficiario.nombre || "",
+              apellido: beneficiario.apellido || "",
+              tipoDocumento: beneficiario.tipo_de_documento || "CC",
+              numeroDocumento: beneficiario.numero_de_documento || "",
+              fechaNacimiento: formatDateInput(beneficiario.fechaDeNacimiento),
+              age: calculateAge(beneficiario.fechaDeNacimiento),
+              direccion: beneficiario.direccion || "",
+              telefono: beneficiario.telefono || "",
+              estado: beneficiario.estado !== undefined ? beneficiario.estado : true,
+            }
+            console.log("Datos del cliente (mismo beneficiario) a cargar:", clienteDataToSet)
+            setClienteData(clienteDataToSet)
+          } else {
+            // Buscar el cliente real por su ID
+            const clienteReal = beneficiarios.find((b) => String(b._id) === clienteIdStr)
+            if (clienteReal) {
+              const clienteDataToSet = {
+                id: clienteReal._id,
+                nombre: clienteReal.nombre || "",
+                apellido: clienteReal.apellido || "",
+                tipoDocumento: clienteReal.tipo_de_documento || "CC",
+                numeroDocumento: clienteReal.numero_de_documento || "",
+                fechaNacimiento: formatDateInput(clienteReal.fechaDeNacimiento),
+                age: calculateAge(clienteReal.fechaDeNacimiento),
+                direccion: clienteReal.direccion || "",
+                telefono: clienteReal.telefono || "",
+                estado: clienteReal.estado !== undefined ? clienteReal.estado : true,
+              }
+              console.log("Datos del cliente real encontrado:", clienteDataToSet)
+              setClienteData(clienteDataToSet)
+            } else {
+              // Si no se encuentra el cliente, usar datos del beneficiario como fallback
+              console.warn("Cliente no encontrado, usando datos del beneficiario como fallback")
+              const clienteDataFallback = {
+                id: beneficiario._id,
+                nombre: beneficiario.nombre || "",
+                apellido: beneficiario.apellido || "",
+                tipoDocumento: beneficiario.tipo_de_documento || "CC",
+                numeroDocumento: beneficiario.numero_de_documento || "",
+                fechaNacimiento: formatDateInput(beneficiario.fechaDeNacimiento),
+                age: calculateAge(beneficiario.fechaDeNacimiento),
+                direccion: beneficiario.direccion || "",
+                telefono: beneficiario.telefono || "",
+                estado: beneficiario.estado !== undefined ? beneficiario.estado : true,
+              }
+              console.log("Datos del cliente fallback:", clienteDataFallback)
+              setClienteData(clienteDataFallback)
+            }
+          }
+
+          // Mapear datos de la matrícula (CORREGIDO para usar _original)
+          if (initialData && initialData._original) {
+            const ventaOriginal = initialData._original
+            const matriculaDataToSet = {
+              id: ventaOriginal._id,
+              cliente: initialData.cliente || "",
+              beneficiario: initialData.beneficiario || "",
+              fechaInicio: formatDateInput(ventaOriginal.fechaInicio),
+              fechaFin: formatDateInput(ventaOriginal.fechaFin),
+              matriculaId: ventaOriginal.matriculaId || "",
+              valor: String(ventaOriginal.valor_total || 0),
+              descuento: String(ventaOriginal.descuento || 0),
+              valorFinal: String((ventaOriginal.valor_total || 0) - (ventaOriginal.descuento || 0)),
+              observaciones: ventaOriginal.observaciones || "",
+              estado: ventaOriginal.estado || "vigente",
+            }
+            console.log("Datos de la matrícula a cargar:", matriculaDataToSet)
+            setMatriculaData(matriculaDataToSet)
+          }
+        } else {
+          console.error("No se pudo encontrar el beneficiario para editar")
+        }
+
+        console.log("Datos cargados completamente para edición")
+      } else {
+        console.log("Modo creación - formulario reiniciado")
+      }
+    }
+  }, [open, isEditing, initialData, beneficiarios])
+
+  // Resetear formulario
+  const resetFormData = () => {
+    setClienteData({
+      id: null,
+      nombre: "",
+      apellido: "",
+      tipoDocumento: "CC",
+      numeroDocumento: "",
+      fechaNacimiento: "",
+      age: "",
+      direccion: "",
+      telefono: "",
+      estado: true,
+    })
+
+    setBeneficiarioData({
+      id: null,
+      nombre: "",
+      apellido: "",
+      tipoDocumento: "TI",
+      numeroDocumento: "",
+      fechaNacimiento: "",
+      age: "",
+      direccion: "",
+      telefono: "",
+      correo: "",
+      estado: true,
+      password: "",
+      confirmPassword: "",
+    })
+
+    setMatriculaData({
+      id: null,
+      cliente: "",
+      beneficiario: "",
+      fechaInicio: "",
+      fechaFin: "",
+      matriculaId: "",
+      valor: "0",
+      descuento: "0",
+      valorFinal: "0",
+      observaciones: "",
+      estado: "vigente",
+    })
+
+    setCursoData({
+      id: null,
+      curso: "",
+      clases: "4",
+      valorCurso: "",
+      valorTotal: "",
+      debe: "",
+      estado: "debe",
+    })
+
+    setClienteSearchTerm("")
+    setBeneficiarioSearchTerm("")
+    setFilteredClientes([])
+    setFilteredBeneficiarios([])
+    setClienteNotFound(false)
+    setBeneficiarioNotFound(false)
+    setClienteCreated(false)
+    setBeneficiarioCreated(false)
+    setShowClienteResults(false)
+    setShowBeneficiarioResults(false)
+    setAlertMessage({ show: false, message: "", severity: "info" })
+    setActiveStep(0)
+    setClienteEsBeneficiario(false)
+  }
+
+  // Manejadores para el formulario multi-paso
+  const handleNext = () => {
+    let isValid = true
+
+    switch (activeStep) {
+      case 0:
+        if (!clienteData.nombre || !clienteData.tipoDocumento || !clienteData.numeroDocumento) {
+          setAlertMessage({
+            show: true,
+            message: "Por favor complete todos los campos obligatorios del cliente",
+            severity: "error",
+          })
+          isValid = false
+        }
+        break
+      case 1:
+        if (!beneficiarioData.nombre || !beneficiarioData.tipoDocumento || !beneficiarioData.numeroDocumento) {
+          setAlertMessage({
+            show: true,
+            message: "Por favor complete todos los campos obligatorios del beneficiario",
+            severity: "error",
+          })
+          isValid = false
+        }
+        if (!isEditing && !beneficiarioData.correo) {
+          setAlertMessage({
+            show: true,
+            message: "Por favor ingrese un correo electrónico para el beneficiario",
+            severity: "error",
+          })
+          isValid = false
+        }
+        if (!isEditing && !beneficiarioData.password) {
+          setAlertMessage({
+            show: true,
+            message: "Por favor ingrese una contraseña para el beneficiario",
+            severity: "error",
+          })
+          isValid = false
+        }
+        if (!isEditing && beneficiarioData.password !== beneficiarioData.confirmPassword) {
+          setAlertMessage({
+            show: true,
+            message: "Las contraseñas no coinciden",
+            severity: "error",
+          })
+          isValid = false
+        }
+        break
+      case 2:
+        if (!matriculaData.fechaInicio || !matriculaData.fechaFin || !matriculaData.matriculaId) {
+          setAlertMessage({
+            show: true,
+            message: "Por favor complete todos los campos obligatorios de la matrícula",
+            severity: "error",
+          })
+          isValid = false
+        }
+        break
+    }
+
+    if (isValid) {
+      setActiveStep((prevStep) => prevStep + 1)
+      setTransition("slideLeft")
+      setAlertMessage({ show: false, message: "", severity: "info" })
+    }
+
+    // Si avanzamos al paso de matrícula, actualizar datos
+    if (activeStep === 1 && isValid) {
+      setMatriculaData((prev) => ({
+        ...prev,
+        cliente: `${clienteData.nombre} ${clienteData.apellido}`,
+        beneficiario: `${beneficiarioData.nombre} ${beneficiarioData.apellido}`,
+      }))
+    }
+  }
+
+  const handleBack = () => {
+    setTransition("slideRight")
+    setActiveStep((prev) => prev - 1)
+  }
+
   // Filtrar clientes mientras se escribe
   const handleClienteSearch = (searchTerm) => {
     setClienteSearchTerm(searchTerm)
@@ -356,15 +519,46 @@ const VentaMatriculasForm = ({
       return
     }
 
-    // Mostrar resultados después de un breve retraso para evitar demasiadas actualizaciones
     setTimeout(() => {
       const searchTermLower = searchTerm.toLowerCase()
-      const matches = clientes.filter(
+
+      // Filtrar clientes que coincidan con la búsqueda
+      let matches = clientes.filter(
         (cliente) =>
           cliente.nombre.toLowerCase().includes(searchTermLower) ||
           cliente.apellido.toLowerCase().includes(searchTermLower) ||
-          cliente.numeroDocumento.includes(searchTerm),
+          cliente.numero_de_documento.includes(searchTerm),
       )
+
+      // Filtrar clientes que NO tengan matrícula activa
+      matches = matches.filter((cliente) => {
+        const tieneMatriculaActiva = ventasOriginales.some((venta) => {
+          if (venta._original.tipo !== "matricula" || venta._original.estado !== "vigente") {
+            return false
+          }
+
+          const beneficiarioVenta = beneficiarios.find((b) => String(b._id) === String(venta._original.beneficiarioId))
+          if (!beneficiarioVenta) return false
+
+          const clienteIdStr = String(beneficiarioVenta.clienteId)
+          const clienteIdActual = String(cliente._id)
+          const beneficiarioIdStr = String(beneficiarioVenta._id)
+
+          // Cliente es beneficiario (clienteId === _id del beneficiario)
+          if (clienteIdStr === beneficiarioIdStr && clienteIdActual === beneficiarioIdStr) {
+            return true
+          }
+
+          // Cliente es diferente del beneficiario
+          if (clienteIdStr !== beneficiarioIdStr && clienteIdStr === clienteIdActual) {
+            return true
+          }
+
+          return false
+        })
+
+        return !tieneMatriculaActiva
+      })
 
       setFilteredClientes(matches)
       setClienteNotFound(matches.length === 0)
@@ -387,15 +581,29 @@ const VentaMatriculasForm = ({
       return
     }
 
-    // Mostrar resultados después de un breve retraso para evitar demasiadas actualizaciones
     setTimeout(() => {
       const searchTermLower = searchTerm.toLowerCase()
-      const matches = beneficiarios.filter(
+
+      // Filtrar beneficiarios que coincidan con la búsqueda
+      let matches = beneficiarios.filter(
         (beneficiario) =>
           beneficiario.nombre.toLowerCase().includes(searchTermLower) ||
           beneficiario.apellido.toLowerCase().includes(searchTermLower) ||
-          beneficiario.numeroDocumento.includes(searchTerm),
+          beneficiario.numero_de_documento.includes(searchTerm),
       )
+
+      // Filtrar beneficiarios que NO tengan matrícula activa
+      matches = matches.filter((beneficiario) => {
+        const tieneMatriculaActiva = ventasOriginales.some((venta) => {
+          return (
+            venta._original.tipo === "matricula" &&
+            venta._original.estado === "vigente" &&
+            String(venta._original.beneficiarioId) === String(beneficiario._id)
+          )
+        })
+
+        return !tieneMatriculaActiva
+      })
 
       setFilteredBeneficiarios(matches)
       setBeneficiarioNotFound(matches.length === 0)
@@ -404,87 +612,55 @@ const VentaMatriculasForm = ({
     }, 300)
   }
 
-  // Crear cliente nuevo
-  const createNewCliente = () => {
-    if (!clienteData.nombre || !clienteData.apellido || !clienteData.numeroDocumento) {
-      setAlertMessage({
-        show: true,
-        message: "Complete los campos requeridos para crear el cliente",
-        severity: "error",
-      })
-      return
-    }
-
-    const newId = Math.max(...clientes.map((c) => c.id)) + 1
-    const newCliente = {
-      ...clienteData,
-      id: newId,
-      age: calculateAge(clienteData.fechaNacimiento),
-      estado: true,
-    }
-
-    setClientes((prev) => [...prev, newCliente])
-    setClienteData(newCliente)
-    setClienteNotFound(false)
-    setClienteCreated(true)
-    setShowClienteResults(false)
-
-    setAlertMessage({
-      show: true,
-      message: "Cliente creado correctamente",
-      severity: "success",
-    })
-  }
-
-  // Crear beneficiario nuevo
-  const createNewBeneficiario = () => {
-    if (!beneficiarioData.nombre || !beneficiarioData.apellido || !beneficiarioData.numeroDocumento) {
-      setAlertMessage({
-        show: true,
-        message: "Complete los campos requeridos para crear el beneficiario",
-        severity: "error",
-      })
-      return
-    }
-
-    const newId = Math.max(...beneficiarios.map((e) => e.id)) + 1
-    const newBeneficiario = {
-      ...beneficiarioData,
-      id: newId,
-      age: calculateAge(beneficiarioData.fechaNacimiento),
-      estado: true,
-    }
-
-    setBeneficiarios((prev) => [...prev, newBeneficiario])
-    setBeneficiarioData(newBeneficiario)
-    setBeneficiarioNotFound(false)
-    setBeneficiarioCreated(true)
-    setShowBeneficiarioResults(false)
-
-    setAlertMessage({
-      show: true,
-      message: "Beneficiario creado correctamente",
-      severity: "success",
-    })
-  }
-
   // Seleccionar cliente de la lista
   const handleSelectCliente = (cliente) => {
-    setClienteData(cliente)
-    setClienteSearchTerm("")
-    setFilteredClientes([])
-    setClienteNotFound(false)
+    setClienteData({
+      id: cliente._id || cliente.id || null,
+      nombre: cliente.nombre || "",
+      apellido: cliente.apellido || "",
+      tipoDocumento: cliente.tipoDocumento || cliente.tipo_de_documento || "",
+      numeroDocumento: cliente.numeroDocumento || cliente.numero_de_documento || "",
+      fechaNacimiento: formatDateInput(
+        cliente.fechaNacimiento || cliente.fecha_de_nacimiento || cliente.fechaDeNacimiento,
+      ),
+      age: calculateAge(cliente.fechaNacimiento || cliente.fecha_de_nacimiento || cliente.fechaDeNacimiento),
+      direccion: cliente.direccion || "",
+      telefono: cliente.telefono || "",
+      estado: cliente.estado !== undefined ? cliente.estado : true,
+    })
     setShowClienteResults(false)
+    setClienteSearchTerm(`${cliente.nombre} ${cliente.apellido}`)
+    setClienteCreated(true)
   }
 
   // Seleccionar beneficiario de la lista
   const handleSelectBeneficiario = (beneficiario) => {
-    setBeneficiarioData(beneficiario)
-    setBeneficiarioSearchTerm("")
-    setFilteredBeneficiarios([])
-    setBeneficiarioNotFound(false)
+    setBeneficiarioData({
+      id: beneficiario._id || beneficiario.id || null,
+      nombre: beneficiario.nombre || "",
+      apellido: beneficiario.apellido || "",
+      tipoDocumento: beneficiario.tipoDocumento || beneficiario.tipo_de_documento || "",
+      numeroDocumento: beneficiario.numeroDocumento || beneficiario.numero_de_documento || "",
+      fechaNacimiento: formatDateInput(
+        beneficiario.fechaNacimiento || beneficiario.fecha_de_nacimiento || beneficiario.fechaDeNacimiento,
+      ),
+      age: calculateAge(
+        beneficiario.fechaNacimiento || beneficiario.fecha_de_nacimiento || beneficiario.fechaDeNacimiento,
+      ),
+      direccion: beneficiario.direccion || "",
+      telefono: beneficiario.telefono || "",
+      correo: beneficiario.correo || beneficiario.email || "",
+      estado: beneficiario.estado !== undefined ? beneficiario.estado : true,
+      password: beneficiarioData.password,
+      confirmPassword: beneficiarioData.confirmPassword,
+    })
     setShowBeneficiarioResults(false)
+    setBeneficiarioSearchTerm(`${beneficiario.nombre} ${beneficiario.apellido}`)
+    setBeneficiarioCreated(true)
   }
+
+  // Solo cursos activos
+  const cursosActivos = cursosDisponibles.filter((c) => c.estado)
 
   // Calcular valor final con descuento
   useEffect(() => {
@@ -514,28 +690,24 @@ const VentaMatriculasForm = ({
     }
   }, [beneficiarioData.fechaNacimiento])
 
+  // Establecer fechas por defecto al llegar al paso de matrícula
   useEffect(() => {
-    if (cursoData.curso) {
-      const cursoSeleccionado = cursosDisponibles.find((c) => c.nombre === cursoData.curso)
-      if (cursoSeleccionado) {
-        setMatriculaData((prev) => ({
-          ...prev,
-          valor: cursoSeleccionado.precio.toString(),
-        }))
-      }
+    if (activeStep === 2 && !matriculaData.fechaInicio && !isEditing) {
+      const hoy = new Date()
+      const fechaInicio = hoy.toISOString().split("T")[0]
+      const fechaFin = new Date(hoy.setFullYear(hoy.getFullYear() + 1)).toISOString().split("T")[0]
+      setMatriculaData((prev) => ({
+        ...prev,
+        fechaInicio: fechaInicio,
+        fechaFin: fechaFin,
+      }))
     }
-  }, [cursoData.curso, cursosDisponibles])
+  }, [activeStep, isEditing])
 
-  // Manejar envío del formulario
+  // Manejar envío del formulario (ACTUALIZADO con nueva lógica)
   const handleSubmit = () => {
-    // Validar datos
-    if (
-      !clienteData.nombre ||
-      !beneficiarioData.nombre ||
-      !matriculaData.fechaInicio ||
-      !matriculaData.fechaFin ||
-      !cursoData.curso // Solo valida que el curso esté seleccionado
-    ) {
+    // Validar datos básicos
+    if (!clienteData.nombre || !beneficiarioData.nombre || !matriculaData.fechaInicio || !matriculaData.fechaFin) {
       setAlertMessage({
         show: true,
         message: "Por favor complete todos los campos requeridos",
@@ -544,27 +716,101 @@ const VentaMatriculasForm = ({
       return
     }
 
-    // Preparar datos para guardar
-    const clienteNombreCompleto = `${clienteData.nombre} ${clienteData.apellido}`
-    const beneficiarioNombreCompleto = `${beneficiarioData.nombre} ${beneficiarioData.apellido}`
+    // Validar contraseñas y correo solo si no estamos editando
+    if (!isEditing) {
+      if (!beneficiarioData.correo) {
+        setAlertMessage({
+          show: true,
+          message: "Por favor ingrese un correo electrónico",
+          severity: "error",
+        })
+        return
+      }
+      if (!beneficiarioData.password || beneficiarioData.password !== beneficiarioData.confirmPassword) {
+        setAlertMessage({
+          show: true,
+          message: "Por favor complete las contraseñas correctamente",
+          severity: "error",
+        })
+        return
+      }
+    }
 
-    const nuevaMatricula = {
-      cliente: clienteNombreCompleto,
-      beneficiario: beneficiarioNombreCompleto,
+    // Usuario para beneficiario - usar campos correctos
+    const usuarioBeneficiario = {
+      nombre: beneficiarioData.nombre,
+      apellido: beneficiarioData.apellido,
+      email: beneficiarioData.correo,
+      contrasena: beneficiarioData.password,
+      documento: beneficiarioData.numeroDocumento,
+      estado: true,
+    }
+
+    // Beneficiario
+    const beneficiario = {
+      id: beneficiarioData.id,
+      nombre: beneficiarioData.nombre,
+      apellido: beneficiarioData.apellido,
+      tipoDocumento: beneficiarioData.tipoDocumento,
+      numeroDocumento: beneficiarioData.numeroDocumento,
+      telefono: beneficiarioData.telefono,
+      direccion: beneficiarioData.direccion,
+      fechaNacimiento: beneficiarioData.fechaNacimiento,
+      correo: beneficiarioData.correo,
+      estado: true,
+    }
+
+    // Cliente (si es diferente del beneficiario)
+    const cliente = clienteEsBeneficiario
+      ? null
+      : {
+          id: clienteData.id,
+          nombre: clienteData.nombre,
+          apellido: clienteData.apellido,
+          tipoDocumento: clienteData.tipoDocumento,
+          numeroDocumento: clienteData.numeroDocumento,
+          telefono: clienteData.telefono,
+          direccion: clienteData.direccion,
+          fechaNacimiento: clienteData.fechaNacimiento,
+          estado: true,
+        }
+
+    // Datos de matrícula
+    const matricula = {
+      id: matriculaData.id,
+      cliente: `${clienteData.nombre} ${clienteData.apellido}`,
+      beneficiario: `${beneficiarioData.nombre} ${beneficiarioData.apellido}`,
       fechaInicio: matriculaData.fechaInicio,
       fechaFin: matriculaData.fechaFin,
+      matriculaId: matriculaData.matriculaId,
       valor: Number.parseFloat(matriculaData.valor),
       descuento: Number.parseFloat(matriculaData.descuento || 0),
       valorFinal: Number.parseFloat(matriculaData.valorFinal),
       observaciones: matriculaData.observaciones,
       estado: matriculaData.estado,
-      curso: cursoData.curso,
-      clases: cursoData.clases,
-      valorCurso: cursoData.valorCurso,
-      debe: cursoData.debe,
     }
 
-    onSubmit(nuevaMatricula)
+    // Datos del curso (opcional y solo si no estamos editando)
+    const curso =
+      !isEditing && cursoData.curso
+        ? {
+            curso: cursoData.curso,
+            clases: Number.parseInt(cursoData.clases),
+            valorCurso: Number.parseFloat(cursoData.valorCurso || 0),
+            valorTotal: Number.parseFloat(cursoData.valorTotal || 0),
+          }
+        : null
+
+    // Envía todo al padre
+    onSubmit({
+      matricula,
+      beneficiario,
+      usuarioBeneficiario,
+      cliente,
+      clienteEsBeneficiario,
+      curso,
+      isEditing,
+    })
   }
 
   // Renderizado del contenido del paso actual
@@ -579,91 +825,80 @@ const VentaMatriculasForm = ({
               Datos del Cliente
             </Typography>
 
-            <Paper elevation={0} sx={{ p: 2, mb: 3, border: "1px solid #e0e0e0", borderRadius: "8px" }}>
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Buscar cliente (nombre, apellido o documento)"
-                    variant="outlined"
-                    size="small"
-                    value={clienteSearchTerm}
-                    onChange={(e) => handleClienteSearch(e.target.value)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon />
-                        </InputAdornment>
-                      ),
-                      endAdornment: clienteLoading && (
-                        <InputAdornment position="end">
-                          <CircularProgress size={20} />
-                        </InputAdornment>
-                      ),
-                    }}
-                    autoFocus
-                  />
+            {!isEditing && (
+              <Paper elevation={0} sx={{ p: 2, mb: 3, border: "1px solid #e0e0e0", borderRadius: "8px" }}>
+                <Grid container spacing={2} alignItems="center">
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Buscar cliente (nombre, apellido o documento)"
+                      variant="outlined"
+                      size="small"
+                      value={clienteSearchTerm}
+                      onChange={(e) => handleClienteSearch(e.target.value)}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon />
+                          </InputAdornment>
+                        ),
+                        endAdornment: clienteLoading && (
+                          <InputAdornment position="end">
+                            <CircularProgress size={20} />
+                          </InputAdornment>
+                        ),
+                      }}
+                      autoFocus
+                    />
+                  </Grid>
                 </Grid>
-              </Grid>
 
-              {showClienteResults && filteredClientes.length > 0 && (
-                <Paper
-                  elevation={3}
-                  sx={{
-                    mt: 1,
-                    maxHeight: "200px",
-                    overflow: "auto",
-                    border: "1px solid #e0e0e0",
-                    borderRadius: "4px",
-                  }}
-                >
-                  <List dense>
-                    {filteredClientes.map((cliente) => (
-                      <ListItem
-                        key={cliente.id}
-                        button
-                        onClick={() => handleSelectCliente(cliente)}
-                        sx={{
-                          "&:hover": {
-                            bgcolor: "rgba(4, 85, 162, 0.08)",
-                          },
-                        }}
-                      >
-                        <ListItemAvatar>
-                          <Avatar sx={{ bgcolor: "#0455a2" }}>
-                            <PersonIcon />
-                          </Avatar>
-                        </ListItemAvatar>
-                        <ListItemText
-                          primary={`${cliente.nombre} ${cliente.apellido}`}
-                          secondary={`${cliente.tipoDocumento}: ${cliente.numeroDocumento}`}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Paper>
-              )}
-
-              {clienteNotFound && clienteSearchTerm !== "" && (
-                <Alert
-                  severity="info"
-                  sx={{ mt: 2 }}
-                  action={
-                    <Button color="inherit" size="small" onClick={createNewCliente} disabled={clienteCreated}>
-                      {clienteCreated ? "Creado" : "Crear Nuevo"}
-                    </Button>
-                  }
-                >
-                  Cliente no encontrado. Complete los datos y cree uno nuevo.
-                </Alert>
-              )}
-
-              {clienteCreated && (
-                <Alert severity="success" sx={{ mt: 2 }} icon={<CheckCircleIcon fontSize="inherit" />}>
-                  Cliente creado correctamente
-                </Alert>
-              )}
-            </Paper>
+                {showClienteResults && filteredClientes.length > 0 && (
+                  <Paper
+                    elevation={3}
+                    sx={{
+                      mt: 1,
+                      maxHeight: "200px",
+                      overflow: "auto",
+                      border: "1px solid #e0e0e0",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    <List dense>
+                      {filteredClientes.map((cliente) => (
+                        <ListItem
+                          key={cliente._id || cliente.id}
+                          button
+                          onClick={() => handleSelectCliente(cliente)}
+                          sx={{
+                            "&:hover": {
+                              bgcolor: "rgba(4, 85, 162, 0.08)",
+                            },
+                          }}
+                        >
+                          <ListItemAvatar>
+                            <Avatar sx={{ bgcolor: "#0455a2" }}>
+                              <PersonIcon />
+                            </Avatar>
+                          </ListItemAvatar>
+                          <ListItemText
+                            primary={`${cliente.nombre} ${cliente.apellido}`}
+                            secondary={`${cliente.tipo_de_documento}: ${cliente.numero_de_documento}`}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Paper>
+                )}
+                {showClienteResults && filteredClientes.length === 0 && clienteSearchTerm.trim() !== "" && (
+                  <Paper elevation={1} sx={{ mt: 1, p: 2, bgcolor: "#fff3cd", border: "1px solid #ffeaa7" }}>
+                    <Typography variant="body2" color="text.secondary">
+                      No se encontraron clientes disponibles. Los clientes con matrículas activas no se muestran.
+                    </Typography>
+                  </Paper>
+                )}
+              </Paper>
+            )}
 
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
@@ -732,7 +967,7 @@ const VentaMatriculasForm = ({
                   margin="normal"
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
                   label="Dirección"
@@ -750,25 +985,6 @@ const VentaMatriculasForm = ({
                   margin="normal"
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Correo Electrónico"
-                  type="email"
-                  value={clienteData.correo}
-                  onChange={(e) => setClienteData({ ...clienteData, correo: e.target.value })}
-                  margin="normal"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Acudiente"
-                  value={clienteData.acudiente}
-                  onChange={(e) => setClienteData({ ...clienteData, acudiente: e.target.value })}
-                  margin="normal"
-                />
-              </Grid>
             </Grid>
           </Box>
         )
@@ -780,91 +996,83 @@ const VentaMatriculasForm = ({
               Datos del Beneficiario
             </Typography>
 
-            <Paper elevation={0} sx={{ p: 2, mb: 3, border: "1px solid #e0e0e0", borderRadius: "8px" }}>
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Buscar beneficiario (nombre, apellido o documento)"
-                    variant="outlined"
-                    size="small"
-                    value={beneficiarioSearchTerm}
-                    onChange={(e) => handleBeneficiarioSearch(e.target.value)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon />
-                        </InputAdornment>
-                      ),
-                      endAdornment: beneficiarioLoading && (
-                        <InputAdornment position="end">
-                          <CircularProgress size={20} />
-                        </InputAdornment>
-                      ),
-                    }}
-                    autoFocus
-                  />
+            {!clienteEsBeneficiario && !isEditing && (
+              <Paper elevation={0} sx={{ p: 2, mb: 3, border: "1px solid #e0e0e0", borderRadius: "8px" }}>
+                <Grid container spacing={2} alignItems="center">
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Buscar beneficiario (nombre, apellido o documento)"
+                      variant="outlined"
+                      size="small"
+                      value={beneficiarioSearchTerm}
+                      onChange={(e) => handleBeneficiarioSearch(e.target.value)}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon />
+                          </InputAdornment>
+                        ),
+                        endAdornment: beneficiarioLoading && (
+                          <InputAdornment position="end">
+                            <CircularProgress size={20} />
+                          </InputAdornment>
+                        ),
+                      }}
+                      autoFocus
+                    />
+                  </Grid>
                 </Grid>
-              </Grid>
 
-              {showBeneficiarioResults && filteredBeneficiarios.length > 0 && (
-                <Paper
-                  elevation={3}
-                  sx={{
-                    mt: 1,
-                    maxHeight: "200px",
-                    overflow: "auto",
-                    border: "1px solid #e0e0e0",
-                    borderRadius: "4px",
-                  }}
-                >
-                  <List dense>
-                    {filteredBeneficiarios.map((beneficiario) => (
-                      <ListItem
-                        key={beneficiario.id}
-                        button
-                        onClick={() => handleSelectBeneficiario(beneficiario)}
-                        sx={{
-                          "&:hover": {
-                            bgcolor: "rgba(4, 85, 162, 0.08)",
-                          },
-                        }}
-                      >
-                        <ListItemAvatar>
-                          <Avatar sx={{ bgcolor: "#0455a2" }}>
-                            <SchoolIcon />
-                          </Avatar>
-                        </ListItemAvatar>
-                        <ListItemText
-                          primary={`${beneficiario.nombre} ${beneficiario.apellido}`}
-                          secondary={`${beneficiario.tipoDocumento}: ${beneficiario.numeroDocumento}`}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Paper>
-              )}
-
-              {beneficiarioNotFound && beneficiarioSearchTerm !== "" && (
-                <Alert
-                  severity="info"
-                  sx={{ mt: 2 }}
-                  action={
-                    <Button color="inherit" size="small" onClick={createNewBeneficiario} disabled={beneficiarioCreated}>
-                      {beneficiarioCreated ? "Creado" : "Crear Nuevo"}
-                    </Button>
-                  }
-                >
-                  Beneficiario no encontrado. Complete los datos y cree uno nuevo.
-                </Alert>
-              )}
-
-              {beneficiarioCreated && (
-                <Alert severity="success" sx={{ mt: 2 }} icon={<CheckCircleIcon fontSize="inherit" />}>
-                  Beneficiario creado correctamente
-                </Alert>
-              )}
-            </Paper>
+                {showBeneficiarioResults && filteredBeneficiarios.length > 0 && (
+                  <Paper
+                    elevation={3}
+                    sx={{
+                      mt: 1,
+                      maxHeight: "200px",
+                      overflow: "auto",
+                      border: "1px solid #e0e0e0",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    <List dense>
+                      {filteredBeneficiarios.map((beneficiario) => (
+                        <ListItem
+                          key={beneficiario._id || beneficiario.id}
+                          button
+                          onClick={() => handleSelectBeneficiario(beneficiario)}
+                          sx={{
+                            "&:hover": {
+                              bgcolor: "rgba(4, 85, 162, 0.08)",
+                            },
+                          }}
+                        >
+                          <ListItemAvatar>
+                            <Avatar sx={{ bgcolor: "#0455a2" }}>
+                              <SchoolIcon />
+                            </Avatar>
+                          </ListItemAvatar>
+                          <ListItemText
+                            primary={`${beneficiario.nombre} ${beneficiario.apellido}`}
+                            secondary={`${beneficiario.tipo_de_documento}: ${beneficiario.numero_de_documento}`}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Paper>
+                )}
+                {showBeneficiarioResults &&
+                  filteredBeneficiarios.length === 0 &&
+                  beneficiarioSearchTerm.trim() !== "" && (
+                    <Paper elevation={1} sx={{ mt: 1, p: 2, bgcolor: "#fff3cd", border: "1px solid #ffeaa7" }}>
+                      <Typography variant="body2" color="text.secondary">
+                        No se encontraron beneficiarios disponibles. Los beneficiarios con matrículas activas no se
+                        muestran.
+                      </Typography>
+                    </Paper>
+                  )}
+              </Paper>
+            )}
 
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
@@ -937,7 +1145,7 @@ const VentaMatriculasForm = ({
                   margin="normal"
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
                   label="Dirección"
@@ -955,9 +1163,10 @@ const VentaMatriculasForm = ({
                   margin="normal"
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12}>
                 <TextField
                   fullWidth
+                  required={!isEditing}
                   label="Correo Electrónico"
                   type="email"
                   value={beneficiarioData.correo}
@@ -965,15 +1174,39 @@ const VentaMatriculasForm = ({
                   margin="normal"
                 />
               </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Acudiente"
-                  value={beneficiarioData.acudiente}
-                  onChange={(e) => setBeneficiarioData({ ...beneficiarioData, acudiente: e.target.value })}
-                  margin="normal"
-                />
-              </Grid>
+
+              {!isEditing && (
+                <>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      required
+                      type="password"
+                      label="Contraseña"
+                      value={beneficiarioData.password}
+                      onChange={(e) => setBeneficiarioData({ ...beneficiarioData, password: e.target.value })}
+                      margin="normal"
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      required
+                      type="password"
+                      label="Confirmar Contraseña"
+                      value={beneficiarioData.confirmPassword}
+                      onChange={(e) => setBeneficiarioData({ ...beneficiarioData, confirmPassword: e.target.value })}
+                      margin="normal"
+                      error={beneficiarioData.password !== beneficiarioData.confirmPassword}
+                      helperText={
+                        beneficiarioData.password !== beneficiarioData.confirmPassword
+                          ? "Las contraseñas no coinciden"
+                          : ""
+                      }
+                    />
+                  </Grid>
+                </>
+              )}
             </Grid>
           </Box>
         )
@@ -987,15 +1220,20 @@ const VentaMatriculasForm = ({
             <Paper elevation={0} sx={{ p: 2, mb: 3, border: "1px solid #e0e0e0", borderRadius: "8px" }}>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" sx={{ color: "#0455a2" }}>Cliente</Typography>
+                  <Typography variant="subtitle2" sx={{ color: "#0455a2" }}>
+                    Cliente
+                  </Typography>
                   <Typography>{matriculaData.cliente}</Typography>
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" sx={{ color: "#0455a2" }}>Beneficiario</Typography>
+                  <Typography variant="subtitle2" sx={{ color: "#0455a2" }}>
+                    Beneficiario
+                  </Typography>
                   <Typography>{matriculaData.beneficiario}</Typography>
                 </Grid>
               </Grid>
             </Paper>
+
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
                 <TextField
@@ -1021,14 +1259,52 @@ const VentaMatriculasForm = ({
                   InputLabelProps={{ shrink: true }}
                 />
               </Grid>
+
+              <Grid item xs={12}>
+                <Divider sx={{ my: 2 }}>Selección de Matrícula</Divider>
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControl fullWidth margin="normal" required>
+                  <InputLabel>Tipo de Matrícula</InputLabel>
+                  <Select
+                    value={matriculaData.matriculaId || ""}
+                    onChange={(e) => {
+                      const matriculaSeleccionada = matriculas.find((m) => m._id === e.target.value)
+                      if (matriculaSeleccionada) {
+                        const valorBase = matriculaSeleccionada.valorMatricula
+                        const descuento = Number.parseFloat(matriculaData.descuento || 0)
+                        const valorFinal = valorBase - descuento
+
+                        setMatriculaData({
+                          ...matriculaData,
+                          matriculaId: e.target.value,
+                          valor: valorBase.toString(),
+                          valorFinal: valorFinal >= 0 ? valorFinal.toString() : "0",
+                        })
+                      }
+                    }}
+                    label="Tipo de Matrícula"
+                  >
+                    {matriculas
+                      .filter((m) => m.estado)
+                      .map((matricula) => (
+                        <MenuItem key={matricula._id} value={matricula._id}>
+                          {matricula.nombre} - ${matricula.valorMatricula?.toLocaleString() || 0}
+                        </MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
               <Grid item xs={12}>
                 <Divider sx={{ my: 2 }}>Información de Pago</Divider>
               </Grid>
+
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  required
-                  label="Valor de la Matrícula"
+                  label="Valor Base de la Matrícula"
                   type="number"
                   value={matriculaData.valor}
                   margin="normal"
@@ -1040,15 +1316,27 @@ const VentaMatriculasForm = ({
                       </InputAdornment>
                     ),
                   }}
+                  disabled
                 />
               </Grid>
+
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
                   label="Monto de Descuento"
                   type="number"
                   value={matriculaData.descuento}
-                  onChange={(e) => setMatriculaData({ ...matriculaData, descuento: e.target.value })}
+                  onChange={(e) => {
+                    const descuento = Number.parseFloat(e.target.value || 0)
+                    const valorBase = Number.parseFloat(matriculaData.valor || 0)
+                    const valorFinal = valorBase - descuento
+
+                    setMatriculaData({
+                      ...matriculaData,
+                      descuento: e.target.value,
+                      valorFinal: valorFinal >= 0 ? valorFinal.toString() : "0",
+                    })
+                  }}
                   margin="normal"
                   InputProps={{
                     startAdornment: (
@@ -1056,9 +1344,11 @@ const VentaMatriculasForm = ({
                         <AttachMoneyIcon />
                       </InputAdornment>
                     ),
+                    inputProps: { min: 0, max: matriculaData.valor },
                   }}
                 />
               </Grid>
+
               <Grid item xs={12}>
                 <TextField
                   fullWidth
@@ -1074,9 +1364,15 @@ const VentaMatriculasForm = ({
                       </InputAdornment>
                     ),
                   }}
-                  sx={{ fontWeight: 700, fontSize: "1.3rem" }}
+                  sx={{
+                    "& .MuiInputBase-input": {
+                      fontWeight: 600,
+                      fontSize: "1.1rem",
+                    },
+                  }}
                 />
               </Grid>
+
               <Grid item xs={12}>
                 <TextField
                   fullWidth
@@ -1093,132 +1389,103 @@ const VentaMatriculasForm = ({
         )
 
       case 3:
-        // Obtener el curso seleccionado
-        const cursoSeleccionado = cursosDisponibles.find(c => c.nombre === cursoData.curso);
-
-        // Obtener profesores del curso (soporta array o string)
-        let profesoresCurso = [];
-        if (cursoSeleccionado) {
-          if (Array.isArray(cursoSeleccionado.profesores)) {
-            profesoresCurso = cursoSeleccionado.profesores;
-          } else if (cursoSeleccionado.profesor) {
-            profesoresCurso = [cursoSeleccionado.profesor];
-          }
-        }
+        // Solo mostrar si no estamos editando
+        if (isEditing) return null
 
         return (
           <Box className={slideClass} sx={{ animation: `${slideClass} 0.3s forwards` }}>
             <Typography variant="h6" sx={{ mb: 2, color: "#0455a2", fontWeight: 500 }}>
-              Información del Curso
+              Información del Curso (Opcional)
             </Typography>
             <Grid container spacing={2}>
               <Grid item xs={12}>
-                <FormControl fullWidth margin="normal" required>
+                <FormControl fullWidth margin="normal">
                   <InputLabel id="curso-label">Curso</InputLabel>
                   <Select
                     labelId="curso-label"
                     value={cursoData.curso}
                     label="Curso"
-                    onChange={e => {
-                      const curso = cursosDisponibles.find(c => c.nombre === e.target.value);
-                      setCursoData(prev => ({
+                    onChange={(e) => {
+                      const curso = cursosActivos.find((c) => c.nombre === e.target.value)
+                      setCursoData((prev) => ({
                         ...prev,
                         curso: e.target.value,
                         clases: "4",
-                        profesor: curso?.profesor || "",
-                        valorCurso: curso ? Math.round(Number(curso.precio) / Number(curso.numeroDeClases || 1)) : "",
-                        valorTotal: curso ? Math.round(Number(curso.precio) / Number(curso.numeroDeClases || 1)) * 4 : "",
-                      }));
+                        valorCurso: curso ? curso.valor_por_hora : "",
+                        valorTotal: curso ? Number(curso.valor_por_hora) * 4 : "",
+                      }))
                     }}
                   >
-                    {cursosDisponibles.map(curso => (
-                      <MenuItem key={curso.id} value={curso.nombre}>
+                    <MenuItem value="">Sin curso</MenuItem>
+                    {cursosActivos.map((curso) => (
+                      <MenuItem key={curso._id} value={curso.nombre}>
                         {curso.nombre}
                       </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Número de Clases"
-                  type="number"
-                  value={cursoData.clases}
-                  margin="normal"
-                  required
-                  InputProps={{
-                    inputProps: { min: 1 }
-                  }}
-                  onChange={e => {
-                    if (!cursoSeleccionado) return;
-                    const precioPorClase = Math.round(Number(cursoSeleccionado.precio) / Number(cursoSeleccionado.numeroDeClases || 1));
-                    const numClases = e.target.value;
-                    setCursoData(prev => ({
-                      ...prev,
-                      clases: numClases,
-                      valorCurso: precioPorClase,
-                      valorTotal: precioPorClase * Number(numClases),
-                    }));
-                  }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth margin="normal" required>
-                  <InputLabel id="profesor-label">Profesor</InputLabel>
-                  <Select
-                    labelId="profesor-label"
-                    value={cursoData.profesor || ""}
-                    label="Profesor"
-                    onChange={e =>
-                      setCursoData(prev => ({
-                        ...prev,
-                        profesor: e.target.value,
-                      }))
-                    }
-                  >
-                    {profesoresCurso.map(prof => (
-                      <MenuItem key={prof} value={prof}>
-                        {prof}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Valor por Hora"
-                  type="number"
-                  value={cursoData.valorCurso}
-                  margin="normal"
-                  InputProps={{
-                    readOnly: true,
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <AttachMoneyIcon />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Valor Total"
-                  type="number"
-                  value={cursoData.valorTotal}
-                  margin="normal"
-                  InputProps={{
-                    readOnly: true,
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <AttachMoneyIcon />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              </Grid>
+
+              {cursoData.curso && (
+                <>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Número de Clases"
+                      type="number"
+                      value={cursoData.clases}
+                      margin="normal"
+                      InputProps={{
+                        inputProps: { min: 1 },
+                      }}
+                      onChange={(e) => {
+                        const cursoSeleccionado = cursosActivos.find((c) => c.nombre === cursoData.curso)
+                        const valorHora = cursoSeleccionado ? cursoSeleccionado.valor_por_hora : 0
+                        const numClases = Number(e.target.value)
+                        setCursoData((prev) => ({
+                          ...prev,
+                          clases: e.target.value,
+                          valorTotal: valorHora * numClases,
+                        }))
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Valor por Hora"
+                      type="number"
+                      value={cursosActivos.find((c) => c.nombre === cursoData.curso)?.valor_por_hora || ""}
+                      margin="normal"
+                      InputProps={{
+                        readOnly: true,
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <AttachMoneyIcon />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Valor Total del Curso"
+                      type="number"
+                      value={cursoData.valorTotal}
+                      margin="normal"
+                      InputProps={{
+                        readOnly: true,
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <AttachMoneyIcon />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Grid>
+                </>
+              )}
             </Grid>
           </Box>
         )
@@ -1236,9 +1503,8 @@ const VentaMatriculasForm = ({
       fullWidth
       PaperProps={{
         sx: {
-          borderRadius: "10px",
-          overflow: "hidden",
-          height: "90vh", // Ajustar la altura del modal
+          borderRadius: "12px",
+          maxHeight: "90vh",
         },
       }}
     >
@@ -1293,17 +1559,19 @@ const VentaMatriculasForm = ({
               Matrícula
             </StepLabel>
           </Step>
-          <Step>
-            <StepLabel
-              icon={<EventNoteIcon color={activeStep >= 3 ? "primary" : "disabled"} />}
-              StepIconProps={{
-                completed: activeStep > 3,
-                active: activeStep === 3,
-              }}
-            >
-              Curso
-            </StepLabel>
-          </Step>
+          {!isEditing && (
+            <Step>
+              <StepLabel
+                icon={<EventNoteIcon color={activeStep >= 3 ? "primary" : "disabled"} />}
+                StepIconProps={{
+                  completed: activeStep > 3,
+                  active: activeStep === 3,
+                }}
+              >
+                Curso
+              </StepLabel>
+            </Step>
+          )}
         </Stepper>
 
         {alertMessage.show && (
@@ -1316,73 +1584,100 @@ const VentaMatriculasForm = ({
           </Alert>
         )}
 
-        <Box sx={{ flexGrow: 1, overflow: "auto" }}>
-          {renderStepContent()}
-        </Box>
+        <Box sx={{ flexGrow: 1, overflow: "auto" }}>{renderStepContent()}</Box>
       </DialogContent>
 
-      <DialogActions sx={{ p: 2, pt: 0, bgcolor: "#f9f9f9" }}>
-        <Button
-          onClick={onClose}
-          variant="outlined"
-          sx={{
-            borderColor: "#0455a2",
-            color: "#0455a2",
-            "&:hover": {
-              borderColor: "#033b70",
-              bgcolor: "rgba(4, 85, 162, 0.04)",
-            },
-          }}
-        >
-          Cancelar
-        </Button>
-
-        {activeStep > 0 && (
+      <DialogActions
+        sx={{
+          p: 2,
+          bgcolor: "#f8f9fa",
+          borderTop: "1px solid #e9ecef",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        {activeStep === 0 && !isEditing && (
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={clienteEsBeneficiario}
+                onChange={(e) => {
+                  setClienteEsBeneficiario(e.target.checked)
+                  if (e.target.checked) {
+                    setBeneficiarioData({
+                      ...clienteData,
+                      id: null,
+                      tipoDocumento: "TI",
+                      correo: "",
+                      password: "",
+                      confirmPassword: "",
+                    })
+                    handleNext()
+                  }
+                }}
+                sx={{
+                  color: "#0455a2",
+                  "&.Mui-checked": {
+                    color: "#0455a2",
+                  },
+                }}
+              />
+            }
+            label="Cliente es beneficiario"
+            sx={{
+              "& .MuiFormControlLabel-label": {
+                fontWeight: 500,
+                color: "#0455a2",
+              },
+            }}
+          />
+        )}
+        <Box sx={{ display: "flex", gap: 2, ml: "auto" }}>
           <Button
-            onClick={handleBack}
+            onClick={onClose}
             variant="outlined"
-            startIcon={<ArrowForwardIcon sx={{ transform: "rotate(180deg)" }} />}
             sx={{
-              borderColor: "#0455a2",
-              color: "#0455a2",
+              textTransform: "none",
+              borderColor: "rgba(0, 0, 0, 0.12)",
+              color: "text.secondary",
               "&:hover": {
-                borderColor: "#033b70",
-                bgcolor: "rgba(4, 85, 162, 0.04)",
+                borderColor: "rgba(0, 0, 0, 0.24)",
               },
             }}
           >
-            Anterior
+            Cancelar
           </Button>
-        )}
-
-        {activeStep < 3 ? (
+          {activeStep > 0 && (
+            <Button
+              onClick={handleBack}
+              variant="outlined"
+              sx={{
+                textTransform: "none",
+                borderColor: "#0455a2",
+                color: "#0455a2",
+                "&:hover": {
+                  borderColor: "#033b70",
+                },
+              }}
+            >
+              Anterior
+            </Button>
+          )}
           <Button
-            onClick={handleNext}
+            onClick={activeStep === steps.length - 1 ? handleSubmit : handleNext}
             variant="contained"
-            endIcon={<ArrowForwardIcon />}
             sx={{
+              textTransform: "none",
               bgcolor: "#0455a2",
               "&:hover": {
                 bgcolor: "#033b70",
               },
             }}
           >
-            Siguiente
+            {activeStep === steps.length - 1 ? "Guardar" : "Siguiente"}
           </Button>
-        ) : (
-          <Button
-            onClick={handleSubmit}
-            variant="contained"
-            sx={{
-              bgcolor: "#0455a2",
-              "&:hover": {
-                bgcolor: "#033b70",
-              },
-            }}
-          >
-            {isEditing ? "Actualizar" : "Guardar"}
-          </Button>
-        )}
+        </Box>
       </DialogActions>
 
       <style jsx global>{`

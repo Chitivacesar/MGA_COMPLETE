@@ -98,6 +98,24 @@ const Navigation = () => {
       permission: "dashboard",
     },
     {
+      label: "Configuración",
+      icon: <Settings />,
+      submenu: [
+        {
+          label: "Roles",
+          path: "/configuracion/roles",
+          icon: <VpnKey />,
+          permission: "configuracion-roles",
+        },
+        {
+          label: "Usuarios",
+          path: "/configuracion/usuarios",
+          icon: <Person />,
+          permission: "configuracion-usuarios",
+        },
+      ],
+    },
+    {
       label: "Servicios Musicales",
       icon: <MusicNote />,
       submenu: [
@@ -139,6 +157,7 @@ const Navigation = () => {
         },
       ],
     },
+    
     {
       label: "Venta de Servicios",
       icon: <ShoppingCart />,
@@ -178,24 +197,6 @@ const Navigation = () => {
           path: "/venta-servicios/asistencia",
           icon: <AssignmentTurnedIn />,
           permission: "venta-servicios-asistencia",
-        },
-      ],
-    },
-    {
-      label: "Configuración",
-      icon: <Settings />,
-      submenu: [
-        {
-          label: "Roles",
-          path: "/configuracion/roles",
-          icon: <VpnKey />,
-          permission: "configuracion-roles",
-        },
-        {
-          label: "Usuarios",
-          path: "/configuracion/usuarios",
-          icon: <Person />,
-          permission: "configuracion-usuarios",
         },
       ],
     },

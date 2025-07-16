@@ -3,7 +3,15 @@ const Beneficiario = require('../models/Beneficiario');
 // GET - Get all beneficiaries
 exports.getBeneficiarios = async (req, res) => {
   try {
-    const beneficiarios = await Beneficiario.find();
+    const searchQuery = req.query.search || '';
+    const query = {
+      $or: [
+        { nombre: { $regex: searchQuery, $options: 'i' } },
+        { apellido: { $regex: searchQuery, $options: 'i' } }
+      ]
+    };
+    
+    const beneficiarios = await Beneficiario.find(query);
     res.json(beneficiarios);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -17,28 +25,16 @@ exports.getBeneficiarioById = async (req, res) => {
     if (beneficiario) {
       res.json(beneficiario);
     } else {
-      res.status(404).json({ message: 'Beneficiary not found' });
+      res.status(404).json({ message: 'Beneficiario no encontrado' });
     }
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// POST - Create new beneficiary
+// POST - Create a new beneficiary
 exports.createBeneficiario = async (req, res) => {
-  const beneficiario = new Beneficiario({
-    nombre: req.body.nombre,
-    apellido: req.body.apellido,
-    tipo_de_documento: req.body.tipo_de_documento,
-    numero_de_documento: req.body.numero_de_documento,
-    telefono: req.body.telefono,
-    direccion: req.body.direccion,
-    fechaDeNacimiento: req.body.fechaDeNacimiento,
-    fechaRegistro: req.body.fechaRegistro,
-    clienteId: req.body.clienteId,
-    usuario_has_rolId: req.body.usuario_has_rolId
-  });
-
+  const beneficiario = new Beneficiario(req.body);
   try {
     const newBeneficiario = await beneficiario.save();
     res.status(201).json(newBeneficiario);
@@ -47,7 +43,7 @@ exports.createBeneficiario = async (req, res) => {
   }
 };
 
-// PUT - Update beneficiary
+// PUT - Update a beneficiary
 exports.updateBeneficiario = async (req, res) => {
   try {
     const beneficiario = await Beneficiario.findById(req.params.id);
@@ -56,23 +52,33 @@ exports.updateBeneficiario = async (req, res) => {
       const updatedBeneficiario = await beneficiario.save();
       res.json(updatedBeneficiario);
     } else {
-      res.status(404).json({ message: 'Beneficiary not found' });
+      res.status(404).json({ message: 'Beneficiario no encontrado' });
     }
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
 };
 
-// DELETE - Delete beneficiary
+// DELETE - Delete a beneficiary
 exports.deleteBeneficiario = async (req, res) => {
   try {
     const beneficiario = await Beneficiario.findById(req.params.id);
-    if (beneficiario) {
-      await beneficiario.deleteOne();
-      res.json({ message: 'Beneficiary deleted' });
-    } else {
-      res.status(404).json({ message: 'Beneficiary not found' });
+    if (!beneficiario) {
+      return res.status(404).json({ message: 'Beneficiario no encontrado' });
     }
+
+    // Verificar si el beneficiario está asociado a alguna venta
+    const Venta = require('../models/Venta');
+    const ventasAsociadas = await Venta.findOne({ beneficiarioId: beneficiario._id });
+    
+    if (ventasAsociadas) {
+      return res.status(400).json({ 
+        message: 'No se puede eliminar el beneficiario porque está asociado a una venta de curso o matrícula' 
+      });
+    }
+
+    await Beneficiario.deleteOne({ _id: beneficiario._id });
+    res.json({ message: 'Beneficiario eliminado' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

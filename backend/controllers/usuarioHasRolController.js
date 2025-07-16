@@ -53,9 +53,11 @@ exports.createUsuarioHasRol = async (req, res) => {
     const relaciones = await UsuarioHasRol.find({ usuarioId: req.body.usuarioId })
       .populate('usuarioId')
       .populate('rolId');
-    res.status(201).json(relaciones);s
+    res.status(201).json(relaciones);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    if (!res.headersSent) {
+      res.status(400).json({ message: error.message });
+    }
   }
 };
 

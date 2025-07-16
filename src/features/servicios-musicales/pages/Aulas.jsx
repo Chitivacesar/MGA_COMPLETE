@@ -230,6 +230,14 @@ const Aulas = () => {
         fields={detailFields}
         open={detailModalOpen}
         onClose={handleCloseDetail}
+        sx={{
+          borderRadius: "8px",
+          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08)",
+          overflow: "hidden",
+          width: "40%", // Reducir el ancho
+          height: "50%", // Reducir la altura
+          maxHeight: "50vh" // Ajustar la altura máxima
+        }}
       />
 
       <FormModal

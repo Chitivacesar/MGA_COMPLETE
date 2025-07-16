@@ -40,9 +40,6 @@ const Profesores = () => {
     open: false,
     message: ''
   });
-  const [usuarios, setUsuarios] = useState([]);
-  const [inputNombre, setInputNombre] = useState('');
-  const [loadingUsuarios, setLoadingUsuarios] = useState(false);
 
   // Define columns with unique keys
   const columns = [
@@ -65,7 +62,7 @@ const Profesores = () => {
     }
   ];
 
-  // Detail fields configuration - SIN CAMPO DE PROGRAMACIÓN
+  // Detail fields configuration - SIN CAMBO DE PROGRAMACIÓN
   const detailFields = [
     { id: 'nombres', label: 'Nombres' },
     { id: 'apellidos', label: 'Apellidos' },
@@ -116,57 +113,16 @@ const Profesores = () => {
     }
   };
 
-  // Cargar usuarios para el autocompletado - VERSION MEJORADA
-  const fetchUsuarios = async () => {
-    try {
-      setLoadingUsuarios(true);
-      console.log('=== FETCHING USUARIOS ===');
-      const response = await axios.get('http://localhost:3000/api/usuarios');
-      console.log('Response completa:', response.data);
-      
-      // Verificar diferentes estructuras de respuesta
-      let lista = [];
-      if (Array.isArray(response.data)) {
-        lista = response.data;
-      } else if (response.data.usuarios && Array.isArray(response.data.usuarios)) {
-        lista = response.data.usuarios;
-      } else if (response.data.data && Array.isArray(response.data.data)) {
-        lista = response.data.data;
-      }
-      
-      console.log('Lista de usuarios procesada:', lista);
-      console.log('Cantidad de usuarios:', lista.length);
-      
-      setUsuarios(lista);
-    } catch (error) {
-      console.error('Error al cargar usuarios:', error);
-      console.error('Error response:', error.response?.data);
-      setAlert({
-        open: true,
-        message: 'Error al cargar los usuarios'
-      });
-    } finally {
-      setLoadingUsuarios(false);
-    }
-  };
-
   // Load professors on component mount
   useEffect(() => {
     fetchProfessors();
   }, []);
-
-  useEffect(() => {
-    if (formModalOpen) {
-      fetchUsuarios();
-    }
-  }, [formModalOpen]);
 
   const handleCreate = () => {
     setIsEditing(false);
     setSelectedProfessor(null);
     setTempProgramacion([]);
     setFormData({});
-    setInputNombre('');
     setFormModalOpen(true);
   };
 
@@ -186,7 +142,6 @@ const Profesores = () => {
     
     setSelectedProfessor(professorForEdit);
     setTempProgramacion(professor.programacion || []);
-    setInputNombre('');
     setFormModalOpen(true);
   };
 
@@ -224,7 +179,7 @@ const Profesores = () => {
       console.log('tempProgramacion:', tempProgramacion);
       console.log('========================');
 
-      // Validar campos requeridos básicos
+      // Validar campos requeridos según el esquema
       const requiredFields = ['nombres', 'apellidos', 'tipoDocumento', 'identificacion', 'telefono', 'correo', 'especialidades'];
       const missingFields = requiredFields.filter(field => {
         if (field === 'especialidades') {
@@ -241,8 +196,8 @@ const Profesores = () => {
         return;
       }
 
-      // Validar formato de nombres y apellidos
-      const nombreRegex = /^[a-zA-ZáéíóúÁÉÍÓÚüÜñÑ .'-]+$/;
+      // Validar restricciones específicas del esquema
+      const nombreRegex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s.\'-]+$/;
       if (!nombreRegex.test(formData.nombres)) {
         setAlert({
           open: true,
@@ -258,22 +213,37 @@ const Profesores = () => {
         return;
       }
 
-      // Validar formato de identificación (solo números)
-      const identificacionRegex = /^[0-9]+$/;
+      const identificacionRegex = /^[0-9A-Za-z\-]+$/;
       if (!identificacionRegex.test(formData.identificacion)) {
         setAlert({
           open: true,
-          message: "El número de identificación solo permite números"
+          message: "La identificación solo permite números, letras y guiones"
         });
         return;
       }
 
-      // Validar formato de correo electrónico
+      const telefonoRegex = /^[0-9+\-\s().ext]+$/;
+      if (!telefonoRegex.test(formData.telefono)) {
+        setAlert({
+          open: true,
+          message: "El teléfono solo permite números, espacios, guiones y extensiones"
+        });
+        return;
+      }
+
       const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
       if (!emailRegex.test(formData.correo)) {
         setAlert({
           open: true,
-          message: 'El formato del correo electrónico no es válido'
+          message: "El formato del correo electrónico no es válido"
+        });
+        return;
+      }
+
+      if (!Array.isArray(formData.especialidades) || formData.especialidades.length === 0) {
+        setAlert({
+          open: true,
+          message: "Debe seleccionar al menos una especialidad"
         });
         return;
       }
@@ -287,24 +257,21 @@ const Profesores = () => {
         telefono: formData.telefono.trim(),
         correo: formData.correo.trim().toLowerCase(),
         estado: formData.estado ? 'Activo' : 'Inactivo',
-        // Asegurar que especialidades sea array
         especialidades: Array.isArray(formData.especialidades) 
           ? formData.especialidades 
-          : [formData.especialidades]
+          : [formData.especialidades],
+        contrasena: formData.password.trim() // Agregar contrasena
       };
 
       // Agregar dirección solo si se proporciona (es opcional según el modelo)
       if (formData.direccion && formData.direccion.trim()) {
         professorData.direccion = formData.direccion.trim();
-      }
+      };
 
       // Agregar programación si existe
       if (tempProgramacion?.length > 0) {
         professorData.programacion = tempProgramacion;
-      }
-
-      // Para nuevos profesores, NO validar ni agregar contraseñas
-      // (Eliminado el bloque de validación y asignación de contraseñas)
+      };
 
       // Realizar petición HTTP
       const config = {
@@ -323,39 +290,15 @@ const Profesores = () => {
           message: 'Profesor actualizado correctamente'
         });
       } else {
-        try {
-          // Usar el usuario seleccionado (NO crear usuario nuevo)
-          const profesorDataConUsuario = {
-            ...professorData,
-            usuarioId: formData.usuarioId // Usar el usuarioId seleccionado
-          };
-          const professorResponse = await axios.post(
-            'http://localhost:3000/api/profesores',
-            profesorDataConUsuario,
-            config
-          );
-          // 3. Asignar rol de profesor (opcional, si tu lógica lo requiere)
-          const rolesResponse = await axios.get('http://localhost:3000/api/roles');
-          const profesorRol = rolesResponse.data.find(rol => rol.nombre.toLowerCase() === 'profesor');
-          if (profesorRol) {
-            await axios.post(
-              'http://localhost:3000/api/usuarios_has_rol', // corregido a guiones
-              {
-                usuarioId: formData.usuarioId,
-                rolId: profesorRol._id
-              },
-              config
-            );
-          }
-          setAlert({
-            open: true,
-            message: 'Profesor creado correctamente y asignado al rol de profesor'
-          });
-        } catch (error) {
-          console.error('Error en el proceso de creación:', error);
-          console.error('Detalles del error:', error.response?.data);
-          throw error;
-        }
+        const professorResponse = await axios.post(
+          'http://localhost:3000/api/profesores',
+          professorData,
+          config
+        );
+        setAlert({
+          open: true,
+          message: 'Profesor creado correctamente'
+        });
       }
 
       // Recargar lista y cerrar modal
@@ -433,7 +376,6 @@ const Profesores = () => {
     setIsEditing(false);
     setTempProgramacion([]);
     setFormData({});
-    setInputNombre('');
   };
 
   const handleOpenScheduleModal = (data) => {
@@ -491,93 +433,46 @@ const Profesores = () => {
     });
   };
 
-  // Función para filtrar usuarios
-  const filtrarUsuarios = (texto) => {
-    if (!texto || texto.trim() === '') {
-      return usuarios; // Mostrar todos si no hay texto
-    }
-    
-    const textoLower = texto.toLowerCase().trim();
-    return usuarios.filter(u => {
-      const nombre = (u.nombre || '').toLowerCase();
-      const apellido = (u.apellido || '').toLowerCase();
-      const nombreCompleto = `${nombre} ${apellido}`;
-      const correo = (u.correo || '').toLowerCase();
-      const documento = (u.documento || '').toString().toLowerCase();
-      
-      return (
-        nombre.includes(textoLower) ||
-        apellido.includes(textoLower) ||
-        nombreCompleto.includes(textoLower) ||
-        correo.includes(textoLower) ||
-        documento.includes(textoLower)
-      );
-    });
-  };
-
-  // Form fields configuration - Función dinámica CORREGIDA
+  // Form fields configuration
   const getFormFields = () => {
-    // Filtrar usuarios que NO estén asociados a un profesor
-    const usuariosConProfesor = professors.map(p => p.correo);
-    // Solo mostrar usuarios cuyo correo NO esté en la lista de profesores
-    const usuariosDisponibles = usuarios.filter(u => !usuariosConProfesor.includes(u.correo));
-
-    const usuarioSeleccionado = usuarios.find(u => u._id === formData.usuarioId) || null;
-    const opcionesFiltradas = filtrarUsuarios(inputNombre);
     const baseFields = [
       {
-        id: 'usuarioId',
-        label: 'Usuario *',
-        type: 'select',
-        required: true,
-        options: usuariosDisponibles.map(user => ({
-          value: user._id,
-          label: `${user.nombre} ${user.apellido} - ${user.correo}`
-        })),
-        onChange: (value, formData, setField) => {
-          const user = usuarios.find(u => u._id === value);
-          if (user) {
-            setField('nombres', user.nombre || '');
-            setField('apellidos', user.apellido || '');
-            setField('correo', user.correo || '');
-            setField('identificacion', user.documento?.toString() || '');
-            setField('tipoDocumento', user.tipo_de_documento || 'CC');
-          } else {
-            setField('nombres', '');
-            setField('apellidos', '');
-            setField('correo', '');
-            setField('identificacion', '');
-            setField('tipoDocumento', 'CC');
-          }
-        }
+        id: 'rol',
+        label: 'Rol Profesor',
+        type: 'text',
+        defaultValue: 'Profesor',
+        disabled: true
       },
       { 
         id: 'nombres',
         label: 'Nombres', 
         type: 'text',
-        required: true,
-        disabled: true
+        required: true
       },
       { 
         id: 'apellidos',
         label: 'Apellidos', 
         type: 'text',
-        required: true,
-        disabled: true
+        required: true
       },
       {
         id: 'tipoDocumento',
         label: 'Tipo de documento *',
-        type: 'text', // Cambiado de 'select' a 'text' para solo mostrar el valor heredado
+        type: 'select',
         required: true,
-        disabled: true // Solo lectura, no editable
+        options: [
+          { value: 'CC', label: 'Cédula de Ciudadanía' },
+          { value: 'CE', label: 'Cédula de Extranjería' },
+          { value: 'TI', label: 'Tarjeta de Identidad' },
+          { value: 'PA', label: 'Pasaporte' },
+          { value: 'RC', label: 'Registro Civil' }
+        ]
       },
       { 
         id: 'identificacion',
         label: 'Número de Identificación *', 
         type: 'text',
-        required: true,
-        disabled: true
+        required: true
       },
       { 
         id: 'telefono', 
@@ -595,8 +490,7 @@ const Profesores = () => {
         id: 'correo',
         label: 'Correo Electrónico *',
         type: 'email',
-        required: true,
-        disabled: true
+        required: true
       },
       { 
         id: 'especialidades',
@@ -616,8 +510,6 @@ const Profesores = () => {
         helperText: 'Activo permite al profesor iniciar sesión'
       }
     ];
-
-    // NO agregar campos de contraseña
 
     // Agregar campo de programación
     baseFields.push({
@@ -657,6 +549,30 @@ const Profesores = () => {
       )
     });
 
+    // Agregar campos de contraseña solo en modo creación
+    if (!isEditing) {
+      baseFields.push(
+        {
+          id: 'password',
+          label: 'Contraseña *',
+          type: 'password',
+          required: true
+        },
+        {
+          id: 'confirmPassword',
+          label: 'Confirmar Contraseña *',
+          type: 'password',
+          required: true,
+          validate: (value, formData) => {
+            if (value !== formData.password) {
+              return 'Las contraseñas no coinciden';
+            }
+            return null;
+          }
+        }
+      );
+    }
+  
     return baseFields;
   };
   
@@ -696,6 +612,8 @@ const Profesores = () => {
             overflowY: 'auto'
           }
         }}
+        disableBackdropClick={true} // Evitar cierre al hacer clic fuera del modal
+        disableEscapeKeyDown={true} // Evitar cierre con la tecla Escape
       />
 
       <ScheduleModal

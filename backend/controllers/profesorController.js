@@ -1,4 +1,5 @@
 const Profesor = require('../models/profesor');
+const Usuario = require('../models/usuario');
 
 // Función auxiliar para manejar errores de validación de Mongoose
 const handleValidationError = (error) => {
@@ -59,23 +60,8 @@ exports.getProfesorById = async (req, res) => {
 exports.createProfesor = async (req, res) => {
   try {
     console.log('Datos recibidos en el controlador:', req.body);
-const mongoose = require('mongoose');
-
-const contadorSchema = new mongoose.Schema({
-  _id: {
-    type: String,
-    required: true // nombre del contador, ej: "ventas"
-  },
-  seq: {
-    type: Number,
-    default: 0
-  }
-});
-
-module.exports = mongoose.model('Contador', contadorSchema, 'contador');
 
     const {
-      usuarioId,
       nombres,
       apellidos,
       tipoDocumento,
@@ -84,22 +70,15 @@ module.exports = mongoose.model('Contador', contadorSchema, 'contador');
       direccion,
       correo,
       especialidades,
-      estado
+      estado,
+      contrasena
     } = req.body;
 
     // Validar campos requeridos según el modelo
-    if (!usuarioId || !nombres || !apellidos || !tipoDocumento || !identificacion || !telefono || !correo || !especialidades) {
+    if (!nombres || !apellidos || !tipoDocumento || !identificacion || !telefono || !correo || !especialidades || !contrasena) {
       return res.status(400).json({
         message: 'Faltan campos requeridos',
-        details: 'usuarioId, nombres, apellidos, tipoDocumento, identificacion, telefono, correo y especialidades son obligatorios'
-      });
-    }
-
-    // Validar usuarioId como ObjectId
-    if (!usuarioId.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({
-        message: 'usuarioId inválido',
-        details: 'usuarioId debe ser un ObjectId válido de MongoDB'
+        details: 'nombres, apellidos, tipoDocumento, identificacion, telefono, correo, especialidades y contrasena son obligatorios'
       });
     }
 
@@ -137,7 +116,6 @@ module.exports = mongoose.model('Contador', contadorSchema, 'contador');
 
     // Crear el profesor
     const profesorData = {
-      usuarioId,
       nombres: nombres.trim(),
       apellidos: apellidos.trim(),
       tipoDocumento,
@@ -152,7 +130,25 @@ module.exports = mongoose.model('Contador', contadorSchema, 'contador');
     }
     const profesor = new Profesor(profesorData);
     const nuevoProfesor = await profesor.save();
-    res.status(201).json(nuevoProfesor);
+
+    // Crear el usuario asociado
+    const usuarioData = {
+      nombre: nombres.trim(),
+      apellido: apellidos.trim(),
+      correo: correo.toLowerCase().trim(),
+      contrasena,
+      rol: 'profesor',
+      estado: true,
+      tipo_de_documento: tipoDocumento,
+      documento: identificacion.toString().trim()
+    };
+    const usuario = new Usuario(usuarioData);
+    await usuario.save();
+
+    res.status(201).json({
+      message: 'Profesor y usuario creados correctamente',
+      profesor: nuevoProfesor
+    });
   } catch (error) {
     console.error('Error al crear profesor:', error);
     const errorResponse = handleValidationError(error);

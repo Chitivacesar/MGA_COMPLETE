@@ -35,13 +35,60 @@ const beneficiarioSchema = new mongoose.Schema({
     default: Date.now
   },
   clienteId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Cliente',  // Asumiendo que tienes un modelo Cliente
+    type: String,
     required: true
   },
   usuario_has_rolId: {
     type: mongoose.Schema.Types.ObjectId,
     required: true
+  }
+}, {
+  collection: 'beneficiarios',
+  validator: {
+    $jsonSchema: {
+      bsonType: 'object',
+      required: [
+        'nombre',
+        'apellido',
+        'tipo_de_documento',
+        'numero_de_documento',
+        'telefono',
+        'direccion',
+        'fechaDeNacimiento'
+      ],
+      properties: {
+        nombre: {
+          bsonType: 'string'
+        },
+        apellido: {
+          bsonType: 'string'
+        },
+        tipo_de_documento: {
+          bsonType: 'string'
+        },
+        numero_de_documento: {
+          bsonType: 'string'
+        },
+        telefono: {
+          bsonType: 'string'
+        },
+        direccion: {
+          bsonType: 'string'
+        },
+        fechaDeNacimiento: {
+          bsonType: 'date'
+        },
+        fechaRegistro: {
+          bsonType: 'date'
+        },
+        clienteId: {
+          bsonType: 'string'
+        },
+        usuario_has_rolId: {
+          bsonType: 'objectId'
+        }
+      }
+    }
   }
 });
 

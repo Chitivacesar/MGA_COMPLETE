@@ -2,7 +2,7 @@
 import { Dialog, Button, Typography, Box, IconButton, Chip, Paper, DialogContent } from "@mui/material"
 import { Close as CloseIcon } from "@mui/icons-material"
 
-export const DetailModal = ({ open, onClose, title, data, fields, customContent }) => {
+export const DetailModal2 = ({ open, onClose, title, data, fields, customContent }) => {
   const renderPermissionWithPrivileges = (permission) => {
     const [module, submodule] = permission.split("-")
     const displayName = submodule
@@ -15,7 +15,7 @@ export const DetailModal = ({ open, onClose, title, data, fields, customContent 
           {displayName}
         </Typography>
         <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", pl: 1 }}>
-          {data.privileges.map((priv) => (
+          {data?.privileges?.map((priv) => (
             <Chip
               key={`${permission}-${priv.id}`}
               label={priv.nombre_privilegio}
@@ -68,11 +68,11 @@ export const DetailModal = ({ open, onClose, title, data, fields, customContent 
             p: 0,
             maxHeight: "70vh",
             overflow: "auto",
-            scrollbarWidth: "none", // Firefox
+            scrollbarWidth: "none",
             "&::-webkit-scrollbar": {
-              display: "none", // Chrome, Safari, Edge
+              display: "none",
             },
-            msOverflowStyle: "none", // IE
+            msOverflowStyle: "none",
           }}
         >
           {customContent}
@@ -116,9 +116,9 @@ export const DetailModal = ({ open, onClose, title, data, fields, customContent 
           borderRadius: "8px",
           boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08)",
           overflow: "hidden",
-          width: "40%", // Reducir aún más el ancho
-          height: "50%", // Reducir aún más la altura
-          maxHeight: "50vh" // Ajustar la altura máxima
+          width: "60%",
+          height: "70%",
+          maxHeight: "70vh"
         },
       }}
     >
@@ -150,7 +150,7 @@ export const DetailModal = ({ open, onClose, title, data, fields, customContent 
           }
         }}>
           <Paper elevation={0} sx={{ p: 0.5, border: "1px solid #e0e0e0", borderRadius: "8px", bgcolor: "#f8f9fa" }}>
-            {fields.map((field) => (
+            {fields?.map((field) => (
               <Box
                 key={field.id}
                 sx={{
@@ -191,7 +191,7 @@ export const DetailModal = ({ open, onClose, title, data, fields, customContent 
                                   gap: 1
                                 }}
                               >
-                                {data.privileges.some(p => p.nombre_privilegio === privilegio) ? (
+                                {data.privileges?.some(p => p.nombre_privilegio === privilegio) ? (
                                   <Typography 
                                     variant="body2" 
                                     sx={{ 

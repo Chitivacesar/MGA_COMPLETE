@@ -6,21 +6,15 @@ const pagoController = {
       const pagos = await Pago.find()
         .populate({
           path: 'ventas',
-          populate: {
+          populate: [{
             path: 'beneficiarioId',
-            populate: {
-              path: 'clienteId',
-              model: 'Cliente'
-            }
-          }
+            model: 'Beneficiario'
+          }]
         })
         .sort({ createdAt: -1 });
 
       const pagosFormateados = pagos.map(pago => {
         const pagoObj = pago.toObject();
-        const venta = pagoObj.ventas;
-        const beneficiario = venta?.beneficiarioId;
-        const cliente = beneficiario?.clienteId;
         return {
           _id: pagoObj._id,
           fechaPago: pagoObj.fechaPago,
@@ -28,16 +22,23 @@ const pagoController = {
           estado: pagoObj.estado,
           createdAt: pagoObj.createdAt,
           updatedAt: pagoObj.updatedAt,
-          ventas: venta ? {
-            ...venta,
-            beneficiario: beneficiario ? {
-              ...beneficiario,
-              cliente: cliente ? { ...cliente } : null
-            } : null
-          } : null,
           valor_total: pagoObj.valor_total || 0,
           valorTotal: pagoObj.valor_total || 0,
-          porcentajePagado: venta?.valor_total ? Math.round((pagoObj.valor_total / venta.valor_total) * 100) : 0
+          ventas: pagoObj.ventas ? {
+            _id: pagoObj.ventas._id,
+            valor_total: pagoObj.ventas.valor_total || 0,
+            beneficiario: pagoObj.ventas.beneficiarioId ? {
+              _id: pagoObj.ventas.beneficiarioId._id,
+              nombre: pagoObj.ventas.beneficiarioId.nombre,
+              apellido: pagoObj.ventas.beneficiarioId.apellido,
+              tipo_de_documento: pagoObj.ventas.beneficiarioId.tipo_de_documento,
+              numero_de_documento: pagoObj.ventas.beneficiarioId.numero_de_documento,
+              telefono: pagoObj.ventas.beneficiarioId.telefono,
+              clienteId: pagoObj.ventas.beneficiarioId.clienteId
+            } : null
+          } : null,
+          porcentajePagado: pagoObj.ventas?.valor_total ? 
+            Math.round((pagoObj.valor_total / pagoObj.ventas.valor_total) * 100) : 0
         };
       });
 
@@ -46,7 +47,6 @@ const pagoController = {
         data: pagosFormateados,
         total: pagosFormateados.length
       });
-  
     } catch (error) {
       console.error('Error en getPagos:', error);
       res.status(500).json({
@@ -57,86 +57,15 @@ const pagoController = {
     }
   },
 
-  // FUNCIÓN DE DEBUG MEJORADA
-  async debugPagos(req, res) {
-    try {
-      console.log('=== DEBUG PAGOS MEJORADO ===');
-      
-      // 1. Ver pagos sin populate
-      const pagosSinPopulate = await Pago.find().limit(1);
-      console.log('PAGOS SIN POPULATE:', JSON.stringify(pagosSinPopulate, null, 2));
-      
-      // 2. Ver con populate completo
-      const pagosCompletos = await Pago.find()
-        .populate({
-          path: 'venta',
-          populate: {
-            path: 'beneficiarioId',
-            model: 'Beneficiario'
-          }
-        })
-        .limit(1);
-      console.log('PAGOS COMPLETOS:', JSON.stringify(pagosCompletos, null, 2));
-      
-      // 3. Verificar estructura del beneficiario
-      if (pagosCompletos.length > 0) {
-        const beneficiario = pagosCompletos[0].venta?.beneficiarioId;
-        console.log('ESTRUCTURA BENEFICIARIO:');
-        console.log('- Nombre:', beneficiario?.nombre);
-        console.log('- Apellido:', beneficiario?.apellido);
-        console.log('- Documento:', beneficiario?.numero_de_documento); // CORREGIDO
-        console.log('- Teléfono:', beneficiario?.telefono);
-        console.log('- Email:', beneficiario?.email); // Puede no existir
-        console.log('- Campos disponibles:', Object.keys(beneficiario || {}));
-      }
-      
-      // 4. Verificar conteos
-      const Venta = require('../models/Venta');
-      const Beneficiario = require('../models/Beneficiario');
-      
-      const ventasCount = await Venta.countDocuments();
-      const beneficiariosCount = await Beneficiario.countDocuments();
-      const pagosCount = await Pago.countDocuments();
-      
-      console.log('CONTEOS:');
-      console.log('- Pagos:', pagosCount);
-      console.log('- Ventas:', ventasCount);
-      console.log('- Beneficiarios:', beneficiariosCount);
-      
-      // 5. Ver ejemplo de venta con beneficiario
-      const ventaEjemplo = await Venta.findOne().populate('beneficiarioId');
-      console.log('VENTA EJEMPLO CON BENEFICIARIO:', JSON.stringify(ventaEjemplo, null, 2));
-      
-      res.json({
-        success: true,
-        pagosSinPopulate,
-        pagosCompletos,
-        counts: { pagos: pagosCount, ventas: ventasCount, beneficiarios: beneficiariosCount },
-        ventaEjemplo,
-        message: 'Debug completado - revisa la consola del servidor'
-      });
-      
-    } catch (error) {
-      console.error('ERROR EN DEBUG:', error);
-      res.status(500).json({ error: error.message, stack: error.stack });
-    }
-  },
-
-  // Obtener un pago por ID - CORREGIDO
   async getPagoById(req, res) {
     try {
-      const { id } = req.params;
-      
-      const pago = await Pago.findById(id)
+      const pago = await Pago.findById(req.params.id)
         .populate({
           path: 'ventas',
-          populate: {
+          populate: [{
             path: 'beneficiarioId',
-            populate: {
-              path: 'clienteId',
-              model: 'Cliente'
-            }
-          }
+            model: 'Beneficiario'
+          }]
         });
 
       if (!pago) {
@@ -146,31 +75,21 @@ const pagoController = {
         });
       }
 
-      // Formatear el pago individual - CORREGIDO
       const pagoObj = pago.toObject();
-      const venta = pagoObj.ventas;
-      const beneficiario = venta?.beneficiarioId;
-      const cliente = beneficiario?.clienteId;
-      const pagoFormateado = {
-        ...pagoObj,
-        valorTotal: pagoObj.valor_total,
-        valor_total: pagoObj.valor_total,
-        ventas: venta ? {
-          ...venta,
-          beneficiario: beneficiario ? {
-            ...beneficiario,
-            cliente: cliente ? { ...cliente } : null
-          } : null
-        } : null
-      };
-
       res.json({
         success: true,
-        data: pagoFormateado
+        data: {
+          ...pagoObj,
+          ventas: pagoObj.ventas ? {
+            ...pagoObj.ventas,
+            beneficiario: pagoObj.ventas.beneficiarioId ? {
+              ...pagoObj.ventas.beneficiarioId,
+              clienteId: pagoObj.ventas.beneficiarioId.clienteId
+            } : null
+          } : null
+        }
       });
-
     } catch (error) {
-      console.error('Error en getPagoById:', error);
       res.status(500).json({
         success: false,
         message: 'Error al obtener el pago',
@@ -179,57 +98,25 @@ const pagoController = {
     }
   },
 
-  // Crear un nuevo pago - MEJORADO
   async createPago(req, res) {
     try {
-      console.log('=== CREATING PAGO ===');
-      console.log('Request body:', req.body);
-      
-      // AGREGADO: Validar que la venta existe
-      const Venta = require('../models/Venta');
-      let venta;
-      // Buscar venta por código o por ID
-      if (mongoose.Types.ObjectId.isValid(req.body.ventas)) {
-        venta = await Venta.findById(req.body.ventas);
-      } else {
-        // Buscar por código de venta
-        venta = await Venta.findOne({ codigoVenta: req.body.ventas });
-      }
-      if (!venta) {
-        return res.status(400).json({
-          success: false,
-          message: 'Venta no encontrada. Verifica el código de venta.'
-        });
-      }
-      // Crear el pago con el ID de la venta
-      const pagoData = {
-        ...req.body,
-        ventas: venta._id // Asegurar que se use el ObjectId
-      };
-      const nuevoPago = new Pago(pagoData);
-      const pagoGuardado = await nuevoPago.save();
-      
-      // Obtener el pago completo con populate profundo
-      const pagoCompleto = await Pago.findById(pagoGuardado._id)
+      const nuevoPago = new Pago(req.body);
+      await nuevoPago.save();
+      const pagoCompleto = await Pago.findById(nuevoPago._id)
         .populate({
           path: 'ventas',
-          populate: {
+          populate: [{
             path: 'beneficiarioId',
-            populate: {
-              path: 'clienteId',
-              model: 'Cliente'
-            }
-          }
+            model: 'Beneficiario'
+          }]
         });
+
       res.status(201).json({
         success: true,
-        data: pagoCompleto,
-        message: 'Pago creado exitosamente'
+        data: pagoCompleto
       });
-
     } catch (error) {
-      console.error('Error en createPago:', error);
-      res.status(400).json({
+      res.status(500).json({
         success: false,
         message: 'Error al crear el pago',
         error: error.message
@@ -237,27 +124,15 @@ const pagoController = {
     }
   },
 
-  // Los demás métodos permanecen igual...
   async updatePago(req, res) {
     try {
-      const { id } = req.params;
-      
-      const pagoActualizado = await Pago.findByIdAndUpdate(
-        id,
+      const pago = await Pago.findByIdAndUpdate(
+        req.params.id,
         req.body,
         { new: true, runValidators: true }
-      ).populate({
-        path: 'ventas',
-        populate: {
-          path: 'beneficiarioId',
-          populate: {
-            path: 'clienteId',
-            model: 'Cliente'
-          }
-        }
-      });
+      );
 
-      if (!pagoActualizado) {
+      if (!pago) {
         return res.status(404).json({
           success: false,
           message: 'Pago no encontrado'
@@ -266,13 +141,10 @@ const pagoController = {
 
       res.json({
         success: true,
-        data: pagoActualizado,
-        message: 'Pago actualizado exitosamente'
+        data: pago
       });
-
     } catch (error) {
-      console.error('Error en updatePago:', error);
-      res.status(400).json({
+      res.status(500).json({
         success: false,
         message: 'Error al actualizar el pago',
         error: error.message
@@ -282,11 +154,9 @@ const pagoController = {
 
   async deletePago(req, res) {
     try {
-      const { id } = req.params;
-      
-      const pagoEliminado = await Pago.findByIdAndDelete(id);
+      const pago = await Pago.findByIdAndDelete(req.params.id);
 
-      if (!pagoEliminado) {
+      if (!pago) {
         return res.status(404).json({
           success: false,
           message: 'Pago no encontrado'
@@ -295,15 +165,37 @@ const pagoController = {
 
       res.json({
         success: true,
-        message: 'Pago eliminado exitosamente',
-        data: pagoEliminado
+        message: 'Pago eliminado correctamente'
       });
-
     } catch (error) {
-      console.error('Error en deletePago:', error);
       res.status(500).json({
         success: false,
         message: 'Error al eliminar el pago',
+        error: error.message
+      });
+    }
+  },
+
+  async debugPagos(req, res) {
+    try {
+      console.log('=== DEBUG PAGOS ===');
+      const pagos = await Pago.find().limit(1)
+        .populate({
+          path: 'ventas',
+          populate: [{
+            path: 'beneficiarioId',
+            model: 'Beneficiario'
+          }]
+        });
+
+      res.json({
+        success: true,
+        data: pagos
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error en debug de pagos',
         error: error.message
       });
     }
